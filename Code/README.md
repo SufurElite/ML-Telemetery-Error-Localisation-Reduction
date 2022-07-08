@@ -21,6 +21,7 @@ To install the requisite libraries simply run
 <hr>
 This section will contain links to and brief descriptions of useful artciles, stackoverflow pages, wikis, etc. 
 
+* https://github.com/lemmingapex/Trilateration
 * https://github.com/jurasofish/multilateration
 * https://stackoverflow.com/questions/17756617/finding-an-unknown-point-using-weighted-multilateration
 * https://gis.stackexchange.com/questions/66/trilateration-using-3-latitude-longitude-points-and-3-distances

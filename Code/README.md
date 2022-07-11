@@ -25,3 +25,5 @@ This section will contain links to and brief descriptions of useful artciles, st
 * https://stackoverflow.com/questions/17756617/finding-an-unknown-point-using-weighted-multilateration
 * https://gis.stackexchange.com/questions/66/trilateration-using-3-latitude-longitude-points-and-3-distances
 * https://stackoverflow.com/questions/8318113/multilateration-of-gps-coordinates
+* https://github.com/glucee/Multilateration/blob/master/Python/example.py
+

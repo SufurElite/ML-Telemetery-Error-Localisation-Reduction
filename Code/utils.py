@@ -20,11 +20,24 @@ def loadNodes():
         del nodes[nodesData[i]["NodeId"]]["NodeId"]
     return nodes
 
-def loadData(month="March"):
+def loadBoundaries():
+    """ Will return the boundaries of the node system """
+    df = pd.read_csv(r'../Data/Nodes.csv')
+    minX = min(df["NodeUTMx"])
+    maxX = max(df["NodeUTMx"])
+    minY = min(df["NodeUTMy"])
+    maxY = max(df["NodeUTMy"])
+    return minX,maxX,minY,maxY
+
+def loadData(month="March", pruned=False):
     """ Loads the data that has been stored from associateTestData, 
         month specifies the month the data was taken happened (March or June)
         by default is March """
-    with open("../Data/"+month+"/associatedTestData.json","r") as f:
+    pathName = "../Data/"+month+"/associatedTestData"
+    if pruned:
+        pathName+="Pruned"
+    pathName+=".json"
+    with open(pathName,"r") as f:
         data = json.load(f)
     return data
 
@@ -111,8 +124,8 @@ def associateTestData(month="March"):
     # Write the resulting data into its relevant folder
     with open("../Data/"+month+"/TestsNoData.txt", "w+") as f:
         f.writelines(testsWithoutDataIds)
-
-    with open("../Data/"+month+"/associatedTestData.json","w+") as f:
+    
+    with open("../Data/"+month+"/associatedTestDataPruned.json","w+") as f:
         json.dump(data, f)
     
     return data
@@ -124,4 +137,4 @@ def calculateDist(RSSI):
     return dist
 
 if __name__=="__main__":
-    print(calculateDist(-98.7))
+    associateTestData()

@@ -1,18 +1,81 @@
 from matplotlib import pyplot as plt
-from utils import loadData, loadNodes
+from utils import loadData, loadNodes, loadBoundaries
+from multilat import marchPredictions
+import os 
 
-def plotRegular():
+# from https://stackoverflow.com/questions/14720331/how-to-generate-random-colors-in-matplotlib
+def get_cmap(n, name='hsv'):
+    '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
+    RGB color; the keyword argument name must be a standard mpl colormap name.'''
+    return plt.cm.get_cmap(name, n)
+
+def plotOriginalMarch():
+    res = marchPredictions(-90)
+    nodes = loadNodes()
+    # removed the boundaries as hardset since
+    # the first test is outside the bounds?
+    minX,maxX,minY,maxY = loadBoundaries()
+    for test in res.keys():
+
+        
+        nodesX = []
+        nodesY = []
+        
+        for nodeId in nodes.keys():
+            nodesX.append(nodes[nodeId]["NodeUTMx"])
+            nodesY.append(nodes[nodeId]["NodeUTMy"])
+
+        fig = plt.figure()
+        fig.set_size_inches(32, 18)
+        ax = fig.add_subplot(111)
+
+        ax.scatter(nodesX, nodesY, c="#0003b8", marker='o', label='Nodes')
+        gtX = res[test]["gt"][0]
+        gtY = res[test]["gt"][1]
+        
+        # if a test is outside the bounds it might be worthwile to log it and remove it
+        if (gtX < minX or gtX>maxX) or (gtY < minY or gtY>maxY) :
+            print(test)
+
+        predX = res[test]["res"][0]
+        predY = res[test]["res"][1]
+
+        # plot the actual location
+        ax.scatter(gtX,gtY,c='g',marker='o',label='Actual Location')
+        # plot the predicted location
+        ax.scatter(predX,predY,c='#b800ab',marker='x',label='Predicted Location')
+        # draw an arrow between the two with the error labeled
+        ax.arrow(predX, predY, gtX-predX, gtY-predY, head_width=0.05, head_length=0.1, color="r", ls=':')
+        ax.text((gtX+predX)/2, (gtY+predY)/2, res[test]['error'], fontsize=10, c='#8f0e19',fontweight='heavy')
+
+        # plot the distances to each nodes
+        cmap = get_cmap(len(res[test]["nodeDists"]))
+        for i in range(len(res[test]["nodeDists"])):
+            nodeDist = res[test]["nodeDists"][i]
+            nodeLocX = res[test]["nodeLocs"][i][0]
+            nodeLocY = res[test]["nodeLocs"][i][1]
+            ax.arrow(nodeLocX, nodeLocY, predX-nodeLocX, predY-nodeLocY, head_width=0.05, head_length=0.1, color=cmap(i), ls=':')
+            ax.text((nodeLocX+predX)/2, (nodeLocY+predY)/2, nodeDist, fontsize=10, c=cmap(i),fontweight='light', fontstyle='italic')
+        plt.legend(loc='best')
+        
+
+        plt.xlabel("UTMx")
+        plt.ylabel("UTMy")
+        plt.title("The original march data predictions")
+
+        plt.savefig(os.getcwd()+'/plots/march/original model/'+test+'.png', bbox_inches='tight') # bbox_inches removes extra white spaces
+        plt.clf()
+        
     
-    pass
-
 def main():
+    plotOriginalMarch()
     return None
 
 if __name__=="__main__":
-    parser.add_argument('--data', dest='data', type=str, help='The data selection you want to visualise')
+    """parser.add_argument('--data', dest='data', type=str, help='The data selection you want to visualise')
     parser.add_argument('--multiLat', dest='data', type=bool, help='Whether you want to see the multilat  given the values')
     parser.add_argument('--model', dest='data', type=str, help='If you want to see the reduced error predicted estimate, which model')
     
 
-    args = parser.parse_args()
+    args = parser.parse_args()"""
     main()

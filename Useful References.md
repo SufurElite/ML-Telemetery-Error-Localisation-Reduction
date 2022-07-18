@@ -14,3 +14,11 @@ This file contains BibTex formatted references to papers whilst researching.
  @article{strohmeier_martinovic_lenders_2018, title={A k-nn-based localization approach for Crowdsourced Air Traffic Communication Networks}, volume={54}, DOI={10.1109/taes.2018.2797760}, number={3}, journal={IEEE Transactions on Aerospace and Electronic Systems}, author={Strohmeier, Martin and Martinovic, Ivan and Lenders, Vincent}, year={2018}, pages={1519–1529}} 
  
  @article{wallace_elden_boucher_phelps_2022, title={An automated radiotelemetry system (ARTS) for monitoring small mammals}, volume={13}, DOI={10.1111/2041-210x.13794}, number={5}, journal={Methods in Ecology and Evolution}, author={Wallace, Gerard and Elden, Marija and Boucher, Rachel and Phelps, Steven}, year={2022}, pages={976–986}} 
+
+ @inproceedings{Chen_2016,
+	doi = {10.1145/2939672.2939785},
+	url = {https://doi.org/10.1145%2F2939672.2939785},
+	year = 2016,
+	month = {aug},
+	publisher = {{ACM}
+},

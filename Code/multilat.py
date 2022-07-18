@@ -1,12 +1,11 @@
 """
-    This file will contain different multilateration methods, as we continue to work on reducing error.
+    This file will contain multilateration methods, as we continue to work on reducing error.
     Currently, it has a reworked implementation from https://github.com/glucee/Multilateration/blob/master/Python/example.py
 """
 import numpy as np
 import scipy.optimize as opt
 import utils, argparse
-from utils import loadData, loadNodes, calculateDist
-
+import utm
 from scipy.optimize import minimize
 import numpy as np
 
@@ -29,8 +28,8 @@ def gps_solve(distsToNodes, nodeLocations):
 
 
 def marchPredictions(rssiThreshold=-105.16, pruned=False):
-    data = loadData(pruned=pruned)
-    nodes = loadNodes()
+    data = utils.loadData(pruned=pruned)
+    nodes = utils.loadNodes()
     numberOfTests = 0
     averageError = 0
     results = {}
@@ -42,10 +41,11 @@ def marchPredictions(rssiThreshold=-105.16, pruned=False):
     for id in data.keys():
         freq = {}
         for dataEntry in data[id]["Data"]:
+            if dataEntry["NodeId"]=="3288000000": dataEntry["NodeId"]="3288e6"
             if dataEntry["TagRSSI"] <=rssiThreshold or dataEntry["NodeId"] not in nodes.keys(): continue
             if dataEntry["NodeId"] not in freq:
                 freq[dataEntry["NodeId"]] = [0,0]
-            freq[dataEntry["NodeId"]][0]+=calculateDist(dataEntry["TagRSSI"])
+            freq[dataEntry["NodeId"]][0]+=utils.calculateDist(dataEntry["TagRSSI"])
             freq[dataEntry["NodeId"]][1]+=1
         """
             Average the distances and populate two lists, one with distances to nodes 
@@ -76,25 +76,87 @@ def marchPredictions(rssiThreshold=-105.16, pruned=False):
     
     return results
 
+def junePredictions(rssiThreshold=-105.16,keepNodeIds=False):
+    """ This should be combined with the March function in reality, which requires rewriting the util load data function
+        but the premise is the exact same and works the same way."""
+    # Load in the June JSON
+    data = utils.loadData(month="June")
+    # assign the relevant variables
+    X = data["X"]
+    y = data["y"]
+    # need to rewrite the node location using the utm module
+    # because we need the utm module for the Drone's gps
+    nodes = utils.loadNodes(rewriteUTM=True)
+    # for stats
+    numberOfTests = 0
+    averageError = 0
+    results = {}
+    
+    for idx in range(len(X)):
+        # the two important lists, the distances to the nodes 
+        # and the node locations themselves (with updated utm)
+        distToNodes = []
+        nodeLocs = []
+        nodesTargeted = []
+        
+        for dataEntry in X[idx]["data"].keys():
+            nodeId = dataEntry    
+            if X[idx]["data"][nodeId] <=rssiThreshold or nodeId not in nodes.keys(): continue
+            distToNodes.append(utils.calculateDist(X[idx]["data"][nodeId]))
+            if dataEntry=="3288000000": nodeId="3288e6"
+            nodeLocs.append([nodes[nodeId]["NodeUTMx"],nodes[nodeId]["NodeUTMy"]])
+            if keepNodeIds:
+                nodesTargeted.append(nodeId)
+            
+        # need at least 3 values
+        if len(distToNodes)<3: continue
+        
+        numberOfEntries = 0
+        # Calculate the multilateration
+        res = np.array(gps_solve(distToNodes, list(np.array(nodeLocs))))
+        utmGT = utm.from_latlon(y[idx][0], y[idx][1])
 
+        gt = np.array([np.float64(utmGT[0]),np.float64(utmGT[1])])
+        dist = np.linalg.norm(res-gt)
+        testId = X[idx]["time"]+X[idx]["tag"]
+        results[testId] = {"gt":gt,
+                       "res":res,
+                       "error":dist,
+                       "nodeDists":distToNodes,
+                       "nodeLocs":nodeLocs}
+        if keepNodeIds:
+            results[testId]["nodeIds"] = nodesTargeted
+        averageError+=dist
+        numberOfTests+=1
+    print("Using a threshold of {} for the RSSI, the average error was {} m".format(rssiThreshold,(averageError/numberOfTests)))
+    #print(numberOfTests)
+    return results
 
 def main(args=None):
-    marchPredictions(-86, True)
-    """
-    stations = list(np.array([[1,1], [0,1], [1,0], [0,0]]))
-    distances_to_station = [0.1, 0.5, 0.5, 1.3]
-    print(gps_solve(distances_to_station, stations))
-    if args.type=="stack":
-        stack()
+    
+    
+    rssiThreshold = -105.16
+    if args.rssi!=None:
+        try:
+            rssiThreshold = int(args.rssi)
+        except:
+            print("You must enter a valid number for the rssi filter")
+    if args.month==None:
+        print("Please enter a month. Currently, these are the supported types: 'June' and 'March'")
+    elif args.month.lower()=="june":
+        junePredictions(rssiThreshold)
+    elif args.month.lower()=="march":
+        marchPredictions(rssiThreshold)
     else:
-        print("Sorry, please list a valid type. Currently, these are the supported types: 'stack'")
-    """
+        print("Sorry, please enter a valid month. Currently, these are the supported types: 'June' and 'March'")
 
 
 if __name__=="__main__":
-    #parser = argparse.ArgumentParser(description='Personal information')
-    #parser.add_argument('--type', dest='type', type=str, help='Type of multilateration approach')
+    parser = argparse.ArgumentParser(description='Multilat variables')
+    parser.add_argument('--month', dest='month', type=str, help='Month of the data')
+    parser.add_argument('--rssi', dest='rssi', type=int, help='rssi filter for the data')
+    parser.add_argument('--pruned', dest='pruned', type=bool, help='Whether or not to use the pruned data, only applicable for March')
 
-    #args = parser.parse_args()
+    args = parser.parse_args()
 
-    main()
+    main(args)

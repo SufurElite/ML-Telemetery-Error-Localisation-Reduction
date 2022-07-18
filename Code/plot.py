@@ -1,7 +1,7 @@
 from matplotlib import pyplot as plt
 from utils import loadData, loadNodes, loadBoundaries
-from multilat import marchPredictions
-import os 
+from multilat import marchPredictions, junePredictions
+import os, argparse
 
 # from https://stackoverflow.com/questions/14720331/how-to-generate-random-colors-in-matplotlib
 def get_cmap(n, name='hsv'):
@@ -9,12 +9,19 @@ def get_cmap(n, name='hsv'):
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
     return plt.cm.get_cmap(name, n)
 
-def plotOriginalMarch():
-    res = marchPredictions(-90)
-    nodes = loadNodes()
+def plotOriginal(month="March", threshold=-90):
+    print("Plotting " + month + " with " + str(threshold) + " as a threshold")
+    redoUtm = False
+    if month == "March":
+        res = marchPredictions(threshold)
+    else:
+        res = junePredictions(threshold)
+        redoUtm= True
+    nodes = loadNodes(redoUtm)
     # removed the boundaries as hardset since
     # the first test is outside the bounds?
-    minX,maxX,minY,maxY = loadBoundaries()
+    minX,maxX,minY,maxY = loadBoundaries(redoUtm)
+    
     for test in res.keys():
 
         
@@ -35,7 +42,7 @@ def plotOriginalMarch():
         
         # if a test is outside the bounds it might be worthwile to log it and remove it
         if (gtX < minX or gtX>maxX) or (gtY < minY or gtY>maxY) :
-            print(test)
+            print("Outside of the boundaries ",test)
 
         predX = res[test]["res"][0]
         predY = res[test]["res"][1]
@@ -61,21 +68,33 @@ def plotOriginalMarch():
 
         plt.xlabel("UTMx")
         plt.ylabel("UTMy")
-        plt.title("The original march data predictions")
-
-        plt.savefig(os.getcwd()+'/plots/march/original model/'+test+'.png', bbox_inches='tight') # bbox_inches removes extra white spaces
+        plt.title("The " + month + " data predictions " + str(threshold) + " filter ")
+        
+        path = os.getcwd()+"/plots/"+month+"/original model"  + str(threshold)+ " threshold/"
+        if not os.path.exists(path):
+            os.makedirs(path)
+            
+        plt.savefig(path+"/"+str(test)+".png", bbox_inches='tight') 
+        # bbox_inches removes extra white spaces
         plt.clf()
         
     
-def main():
-    plotOriginalMarch()
+def main(args=None):
+    rssiThreshold=-105.16
+    if args.rssi!=None:
+        rssiThreshold = args.rssi
+    if args.month==None:
+        print("Please select a month to visualise with --month month, where you can select 'march' or 'june'")
+    elif args.month.lower()=="march":
+        plotOriginal("March", rssiThreshold)
+    elif args.month.lower()=="june":
+        plotOriginal("June", rssiThreshold)
     return None
 
 if __name__=="__main__":
-    """parser.add_argument('--data', dest='data', type=str, help='The data selection you want to visualise')
-    parser.add_argument('--multiLat', dest='data', type=bool, help='Whether you want to see the multilat  given the values')
-    parser.add_argument('--model', dest='data', type=str, help='If you want to see the reduced error predicted estimate, which model')
-    
+    parser = argparse.ArgumentParser(description='Plot variables')
+    parser.add_argument('--month', dest='month', type=str, help='The month of the data you want to visualise')
+    parser.add_argument('--rssi', dest='rssi', type=int, help='rssi filter for the data')
 
-    args = parser.parse_args()"""
-    main()
+    args = parser.parse_args()
+    main(args)

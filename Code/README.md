@@ -2,7 +2,6 @@
 The code for this project is written in Python where each file tackles a different part of the process (and utils provides different auxiliary functions that are applicable to multiple files). 
 
 ## How To:
----
 
 The code is currently mainly written in Python, although the starting point (with respect to inspiration, methodology, etc.) for this project in idea and approach was written in R. See Paxton in Useful links.
 
@@ -26,7 +25,6 @@ E.g.,
 Note: not currently only plotting has arguments required (will be changed in the future). So for the other files' functionality, modify as need be and just run python file.py, as with any other file
 
 ## Libraries:
----
 The following are the libraries currently used as noted in the requirements.txt file:
 
 * matplotlib==3.5.2
@@ -39,7 +37,6 @@ The following are the libraries currently used as noted in the requirements.txt 
 
 
 ## Useful Links:
----
 This section will contain links to and possibly brief descriptions of useful artciles, stackoverflow pages, wikis, etc. 
 
 ### Multilateration

@@ -27,7 +27,7 @@ def gps_solve(distsToNodes, nodeLocations):
     return minimize(error, x0, args=(nodeLocations, distsToNodes), method='Nelder-Mead').x
 
 
-def marchPredictions(rssiThreshold=-105.16, pruned=False):
+def marchPredictions(rssiThreshold=-105.16, pruned=False, isTriLat = False):
     data = utils.loadData(pruned=pruned)
     nodes = utils.loadNodes()
     numberOfTests = 0
@@ -43,6 +43,9 @@ def marchPredictions(rssiThreshold=-105.16, pruned=False):
         for dataEntry in data[id]["Data"]:
             if dataEntry["NodeId"]=="3288000000": dataEntry["NodeId"]="3288e6"
             if dataEntry["TagRSSI"] <=rssiThreshold or dataEntry["NodeId"] not in nodes.keys(): continue
+            # If we're doing trilateration rather than multi, keep only the 3 lowest values
+            if isTriLat and len(distToNodes)==3 and X[idx]["data"][nodeId]>min(distToNodes):
+                continue
             if dataEntry["NodeId"] not in freq:
                 freq[dataEntry["NodeId"]] = [0,0]
             freq[dataEntry["NodeId"]][0]+=utils.calculateDist(dataEntry["TagRSSI"])
@@ -76,7 +79,7 @@ def marchPredictions(rssiThreshold=-105.16, pruned=False):
     
     return results
 
-def junePredictions(rssiThreshold=-105.16,keepNodeIds=False):
+def junePredictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False):
     """ This should be combined with the March function in reality, which requires rewriting the util load data function
         but the premise is the exact same and works the same way."""
     # Load in the June JSON
@@ -91,7 +94,7 @@ def junePredictions(rssiThreshold=-105.16,keepNodeIds=False):
     numberOfTests = 0
     averageError = 0
     results = {}
-    
+    currentMax = 0
     for idx in range(len(X)):
         # the two important lists, the distances to the nodes 
         # and the node locations themselves (with updated utm)
@@ -102,11 +105,23 @@ def junePredictions(rssiThreshold=-105.16,keepNodeIds=False):
         for dataEntry in X[idx]["data"].keys():
             nodeId = dataEntry    
             if X[idx]["data"][nodeId] <=rssiThreshold or nodeId not in nodes.keys(): continue
+            # If we're doing trilateration rather than multi, keep only the 3 lowest values
+            if isTriLat and len(distToNodes)==3 and X[idx]["data"][nodeId]>currentMax:
+                continue
             distToNodes.append(utils.calculateDist(X[idx]["data"][nodeId]))
             if dataEntry=="3288000000": nodeId="3288e6"
             nodeLocs.append([nodes[nodeId]["NodeUTMx"],nodes[nodeId]["NodeUTMy"]])
             if keepNodeIds:
                 nodesTargeted.append(nodeId)
+            # If we're doing trilateration rather than multi, keep only the 3 lowest values
+            if isTriLat and len(distToNodes)==4:
+                # find the maximum value and remove the index from all lists
+                ind = np.argmax(distToNodes)
+                del distToNodes[ind]
+                del nodeLocs[ind]
+                if keepNodeIds:
+                    del nodesTargeted[ind]
+            currentMax = max(distToNodes)
             
         # need at least 3 values
         if len(distToNodes)<3: continue
@@ -128,7 +143,7 @@ def junePredictions(rssiThreshold=-105.16,keepNodeIds=False):
             results[testId]["nodeIds"] = nodesTargeted
         averageError+=dist
         numberOfTests+=1
-    print("Using a threshold of {} for the RSSI, the average error was {} m".format(rssiThreshold,(averageError/numberOfTests)))
+    print("Using a threshold of {} for the RSSI, with multilateration: {}, using trilateration: {}, the average error was {} m".format(rssiThreshold, not isTriLat, isTriLat, (averageError/numberOfTests)))
     #print(numberOfTests)
     return results
 
@@ -136,17 +151,21 @@ def main(args=None):
     
     
     rssiThreshold = -105.16
+    trilat = False
     if args.rssi!=None:
         try:
             rssiThreshold = int(args.rssi)
         except:
             print("You must enter a valid number for the rssi filter")
+    if args.trilat!=None:
+        trilat = True
+
     if args.month==None:
         print("Please enter a month. Currently, these are the supported types: 'June' and 'March'")
     elif args.month.lower()=="june":
-        junePredictions(rssiThreshold)
+        junePredictions(rssiThreshold, isTriLat=trilat)
     elif args.month.lower()=="march":
-        marchPredictions(rssiThreshold)
+        marchPredictions(rssiThreshold, isTriLat=trilat)
     else:
         print("Sorry, please enter a valid month. Currently, these are the supported types: 'June' and 'March'")
 
@@ -155,6 +174,7 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Multilat variables')
     parser.add_argument('--month', dest='month', type=str, help='Month of the data')
     parser.add_argument('--rssi', dest='rssi', type=int, help='rssi filter for the data')
+    parser.add_argument('--trilat', dest='trilat', type=bool, help='Whether we\'re using trilateration rather than multi')
     parser.add_argument('--pruned', dest='pruned', type=bool, help='Whether or not to use the pruned data, only applicable for March')
 
     args = parser.parse_args()

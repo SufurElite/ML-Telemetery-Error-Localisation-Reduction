@@ -2,7 +2,7 @@
     A file that contains functions related to exploratory data analysis. 
 """
 import numpy as np
-import utils
+import utils, utm
 
 def closestNodeCount(month="March"):
     """ This function goes over the data, specified by month, and then compares the  
@@ -100,5 +100,52 @@ def closestNodeCount(month="March"):
     print("Here is the dictionary of each node that was misclassified and the number of misclassifications they had with other nodes:")
     print(frequencyConfused)
 
+def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
+    """
+        This function will evaluate the overall accuracy of a provided RSSI->distance function.
+        The values that are collected here should indicate the overall distance error compared to reality,
+        as well as the for each individual node.
+
+        (Right now just works with June)
+    """
+    data = utils.loadData("June")
+    nodes = utils.loadNodes(True)
+    X = data["X"]
+    y = data["y"]
+    
+    
+    totalDistanceError = [0,0]
+    nodeDistErrorFreq = {}
+    for node in list(nodes.keys()):
+        nodeDistErrorFreq[node] = [0,0]
+    
+    for i in range(len(X)):
+        """ determine the actual distance from the tag to each node 
+            and then the approximated one by the provided function"""
+        # get the utm location of the drone
+        utmGT = utm.from_latlon(y[i][0], y[i][1])
+        gt = np.array([np.float64(utmGT[0]),np.float64(utmGT[1])])
+        for dataEntry in X[i]["data"].keys():
+            nodeId = dataEntry
+            if X[i]["data"][dataEntry] <=rssiThreshold: continue
+            if dataEntry=="3288000000": nodeId="3288e6"
+            # find the current nodes location and estimated value
+            nodeLoc = np.array([np.float64(nodes[nodeId]['NodeUTMx']),np.float64(nodes[nodeId]['NodeUTMy'])])
+            actualDist = np.linalg.norm(nodeLoc-gt)
+            # find the approximated distance by the function provided
+            approxDist = distanceFunction(X[i]["data"][dataEntry])
+            nodeDistErrorFreq[nodeId][0]+=(abs(actualDist-approxDist))
+            nodeDistErrorFreq[nodeId][1]+=1
+
+            totalDistanceError[0]+=(abs(actualDist-approxDist))
+            totalDistanceError[1]+=1
+    
+    print("With an RSSI threshold of {}".format(rssiThreshold))
+    print("and given the provided RSSI -> distance function, the following results were obtained:")
+    for node in nodeDistErrorFreq.keys():
+        if nodeDistErrorFreq[node][0]==0: continue
+        print("\t{} had an average error of {}m".format(node, (nodeDistErrorFreq[node][0]/nodeDistErrorFreq[node][1])))
+    print("Thus the function had a total overall average error of {} m".format((totalDistanceError[0]/totalDistanceError[1])))
+
 if __name__=="__main__":
-    closestNodeCount()
+    compareDistanceCalculator(utils.calculateDist, -90)

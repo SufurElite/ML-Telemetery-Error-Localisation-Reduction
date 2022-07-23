@@ -11,7 +11,7 @@ import numpy as np
 
 def gps_solve(distsToNodes, nodeLocations):
     """
-        Implementation to solve the equations for the circle intersections comes from: 
+        Implementation to solve the equations for the circle intersections comes from:
         https://github.com/glucee/Multilateration/blob/master/Python/example.py
     """
     def error(x, c, r):
@@ -33,9 +33,9 @@ def marchPredictions(rssiThreshold=-105.16, pruned=False, isTriLat = False):
     numberOfTests = 0
     averageError = 0
     results = {}
-    """ 
-        Each test is within a 2 minute time frame iirc, so 
-        I will take the average distance for each node in that time frame and then create 
+    """
+        Each test is within a 2 minute time frame iirc, so
+        I will take the average distance for each node in that time frame and then create
         the requisite input for the gpsSolve and then compare to the actual distance
     """
     for id in data.keys():
@@ -51,7 +51,7 @@ def marchPredictions(rssiThreshold=-105.16, pruned=False, isTriLat = False):
             freq[dataEntry["NodeId"]][0]+=utils.calculateDist(dataEntry["TagRSSI"])
             freq[dataEntry["NodeId"]][1]+=1
         """
-            Average the distances and populate two lists, one with distances to nodes 
+            Average the distances and populate two lists, one with distances to nodes
             and the other the location of the nodes
         """
         if freq == {} or len(freq.keys())<3: continue
@@ -62,11 +62,11 @@ def marchPredictions(rssiThreshold=-105.16, pruned=False, isTriLat = False):
             freq[node][0]/=freq[node][1]
             distToNodes.append(freq[node][0])
             nodeLocs.append([nodes[node]["NodeUTMx"],nodes[node]["NodeUTMy"]])
-        
+
         res = np.array(gps_solve(distToNodes, list(np.array(nodeLocs))))
         gt = np.array([np.float64(data[id]["GroundTruth"]["TestUTMx"]),np.float64(data[id]["GroundTruth"]["TestUTMy"])])
         dist = np.linalg.norm(res-gt)
-        
+
         results[id] = {"gt":gt,
                        "res":res,
                        "error":dist,
@@ -74,9 +74,9 @@ def marchPredictions(rssiThreshold=-105.16, pruned=False, isTriLat = False):
                        "nodeLocs":nodeLocs}
         averageError+=dist
         numberOfTests+=1
-    
+
     print("Using a threshold of {} for the RSSI, the average error was {} m".format(rssiThreshold,(averageError/numberOfTests)))
-    
+
     return results
 
 def junePredictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False):
@@ -96,14 +96,14 @@ def junePredictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False):
     results = {}
     currentMax = 0
     for idx in range(len(X)):
-        # the two important lists, the distances to the nodes 
+        # the two important lists, the distances to the nodes
         # and the node locations themselves (with updated utm)
         distToNodes = []
         nodeLocs = []
         nodesTargeted = []
-        
+
         for dataEntry in X[idx]["data"].keys():
-            nodeId = dataEntry    
+            nodeId = dataEntry
             if X[idx]["data"][nodeId] <=rssiThreshold or nodeId not in nodes.keys(): continue
             # If we're doing trilateration rather than multi, keep only the 3 lowest values
             if isTriLat and len(distToNodes)==3 and X[idx]["data"][nodeId]>currentMax:
@@ -122,10 +122,10 @@ def junePredictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False):
                 if keepNodeIds:
                     del nodesTargeted[ind]
             currentMax = max(distToNodes)
-            
+
         # need at least 3 values
         if len(distToNodes)<3: continue
-        
+
         numberOfEntries = 0
         # Calculate the multilateration
         res = np.array(gps_solve(distToNodes, list(np.array(nodeLocs))))
@@ -148,8 +148,8 @@ def junePredictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False):
     return results
 
 def main(args=None):
-    
-    
+
+
     rssiThreshold = -105.16
     trilat = False
     if args.rssi!=None:

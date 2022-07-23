@@ -19,10 +19,10 @@ def rmseModel():
     # Train a regressor on it
     reg = xgb.XGBRegressor(tree_method="hist", n_estimators=32)
     reg.fit(X_train, y_train, eval_set=[(X_valid, y_valid)])
-    
+
     yPred = reg.predict(X)
     avgError = [0,0]
-    
+
     for idx in range(len(yPred)):
         gt = np.array([np.float64(X[idx][0]+y[idx][0]), np.float64(X[idx][1]+y[idx][1])])
         predicted = np.array([np.float64(yPred[idx][0]+X[idx][0]),np.float64(yPred[idx][1]+X[idx][1])])
@@ -45,4 +45,3 @@ def rmseModel():
 
 if __name__ == "__main__":
     rmseModel()
-    

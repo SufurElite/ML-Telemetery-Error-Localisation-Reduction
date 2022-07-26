@@ -407,4 +407,5 @@ if __name__=="__main__":
     #random()
     #dataObt()
     #newEquation()
-    plotEquation()
+    #plotEquation()
+    #compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16)

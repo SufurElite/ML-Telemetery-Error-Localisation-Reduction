@@ -5,7 +5,7 @@ import os, argparse
 
 # from https://stackoverflow.com/questions/14720331/how-to-generate-random-colors-in-matplotlib
 def get_cmap(n, name='hsv'):
-    '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
+    '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
     return plt.cm.get_cmap(name, n)
 
@@ -21,13 +21,13 @@ def plotOriginal(month="March", threshold=-90):
     # removed the boundaries as hardset since
     # the first test is outside the bounds?
     minX,maxX,minY,maxY = loadBoundaries(redoUtm)
-    
+
     for test in res.keys():
 
-        
+
         nodesX = []
         nodesY = []
-        
+
         for nodeId in nodes.keys():
             nodesX.append(nodes[nodeId]["NodeUTMx"])
             nodesY.append(nodes[nodeId]["NodeUTMy"])
@@ -39,7 +39,7 @@ def plotOriginal(month="March", threshold=-90):
         ax.scatter(nodesX, nodesY, c="#0003b8", marker='o', label='Nodes')
         gtX = res[test]["gt"][0]
         gtY = res[test]["gt"][1]
-        
+
         # if a test is outside the bounds it might be worthwile to log it and remove it
         if (gtX < minX or gtX>maxX) or (gtY < minY or gtY>maxY) :
             print("Outside of the boundaries ",test)
@@ -64,21 +64,21 @@ def plotOriginal(month="March", threshold=-90):
             ax.arrow(nodeLocX, nodeLocY, predX-nodeLocX, predY-nodeLocY, head_width=0.05, head_length=0.1, color=cmap(i), ls=':')
             ax.text((nodeLocX+predX)/2, (nodeLocY+predY)/2, nodeDist, fontsize=10, c=cmap(i),fontweight='light', fontstyle='italic')
         plt.legend(loc='best')
-        
+
 
         plt.xlabel("UTMx")
         plt.ylabel("UTMy")
         plt.title("The " + month + " data predictions " + str(threshold) + " filter ")
-        
+
         path = os.getcwd()+"/plots/"+month+"/original model"  + str(threshold)+ " threshold/"
         if not os.path.exists(path):
             os.makedirs(path)
-            
-        plt.savefig(path+"/"+str(test)+".png", bbox_inches='tight') 
+
+        plt.savefig(path+"/"+str(test)+".png", bbox_inches='tight')
         # bbox_inches removes extra white spaces
         plt.clf()
-        
-    
+
+
 def main(args=None):
     rssiThreshold=-105.16
     if args.rssi!=None:

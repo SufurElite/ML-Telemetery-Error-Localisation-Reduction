@@ -48,7 +48,7 @@ def marchPredictions(rssiThreshold=-105.16, pruned=False, isTriLat = False):
                 continue
             if dataEntry["NodeId"] not in freq:
                 freq[dataEntry["NodeId"]] = [0,0]
-            freq[dataEntry["NodeId"]][0]+=utils.calculateDist(dataEntry["TagRSSI"])
+            freq[dataEntry["NodeId"]][0]+=utils.calculateDist_2(dataEntry["TagRSSI"])
             freq[dataEntry["NodeId"]][1]+=1
         """
             Average the distances and populate two lists, one with distances to nodes
@@ -72,6 +72,7 @@ def marchPredictions(rssiThreshold=-105.16, pruned=False, isTriLat = False):
                        "error":dist,
                        "nodeDists":distToNodes,
                        "nodeLocs":nodeLocs}
+
         averageError+=dist
         numberOfTests+=1
 
@@ -108,7 +109,7 @@ def junePredictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False):
             # If we're doing trilateration rather than multi, keep only the 3 lowest values
             if isTriLat and len(distToNodes)==3 and X[idx]["data"][nodeId]>currentMax:
                 continue
-            distToNodes.append(utils.calculateDist(X[idx]["data"][nodeId]))
+            distToNodes.append(utils.calculateDist_2(X[idx]["data"][nodeId]))
             if dataEntry=="3288000000": nodeId="3288e6"
             nodeLocs.append([nodes[nodeId]["NodeUTMx"],nodes[nodeId]["NodeUTMy"]])
             if keepNodeIds:

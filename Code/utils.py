@@ -7,6 +7,9 @@ import numpy as np
 import json, utm
 import datetime
 import multilat
+import math
+from vincenty import vincenty
+from scipy.optimize import curve_fit
 
 def loadNodes(rewriteUTM=False):
     """ Loads in the nodes from the CSV and returns it as a dictionary where the key is its NodeId"""
@@ -93,12 +96,17 @@ def loadModelData(month="June", modelType="initial", threshold=-90, verbose=True
         tmp_y[0] = round(tmp_y[0],1)
         tmp_y[1] = round(tmp_y[1],1)
 
-        for nodeNum in range(len(nodeKeys)):
-            # if the node id is not one of the ones the tag contacted skip
-            if nodeKeys[nodeNum] not in res[entry]["nodeIds"]: continue
-            # otherwise set the relative x value equivalent to the distance
-            nodeIdx = res[entry]["nodeIds"].index(nodeKeys[nodeNum])
-            x[2+nodeNum] = res[entry]["nodeDists"][nodeIdx]
+        #If it is a March run, it would not have a nodeIds keys
+        #Figured it is not that importnat for March rn.
+        if month =="June":
+            for nodeNum in range(len(nodeKeys)):
+                # if the node id is not one of the ones the tag contacted skip
+
+                if nodeKeys[nodeNum] not in res[entry]["nodeIds"]: continue
+                # otherwise set the relative x value equivalent to the distance
+                nodeIdx = res[entry]["nodeIds"].index(nodeKeys[nodeNum])
+
+                x[2+nodeNum] = res[entry]["nodeDists"][nodeIdx]
         x = np.array(x)
         tmp_y = np.array(tmp_y)
         X.append(x)
@@ -112,13 +120,17 @@ def loadModelData(month="June", modelType="initial", threshold=-90, verbose=True
 
     return X, y
 
-def associateJuneData():
+def associateJuneData(newData = False):
     """ This function currently only works for June but ideally will be refactored with the March function.
         It associates the TestIds and its data with the rows
 
         Of the beepdata, currently uses 10,927 rows for 707 batches ~ 15.4 rows a batch
         seems like there must be an error
         """
+
+    if(newData == True):
+        #print("Running the new data!")
+        nodeLocations = loadNodes(rewriteUTM=True)
     # Load the June BeepData in
     beepData = pd.read_csv(r'../Data/June/BeepData.csv')
     # sort the data by tag and time, so that as we increment we can group them together in ~2 second intervals
@@ -150,7 +162,6 @@ def associateJuneData():
     X = []
     # y will be composed of X items corresponding GT flight values
     y = []
-
     batch = {}
     baseTime = '0'
     tag = ''
@@ -160,8 +171,12 @@ def associateJuneData():
     missedthecutbadSort = 0
     missedTheCutTooFew = 0
     for index, row in enumerate(beepData.iterrows()):
-        currDate = datetime.datetime.strptime(row[1]['Time.local'],"%Y-%m-%dT%H:%M:%SZ")
-        print(index)
+        #Converting it already
+        row[1]['Time.local'] = datetime.datetime.strptime(row[1]['Time.local'], "%Y-%m-%dT%H:%M:%SZ")
+        currDate = row[1]['Time.local']
+        #Changing NodeId - because NewData needs to find the NodeID
+        if row[1]['NodeId']=="3288000000": row[1]['NodeId']="3288e6"
+        #print(index)
         if baseTime == '0':
             batch = {}
             baseTime = currDate
@@ -169,7 +184,7 @@ def associateJuneData():
         elif tag!=row[1]['TagId'] or (currDate-baseTime>datetime.timedelta(0,2)):
             # Look for flight data th the same time
             upperBound = baseTime+datetime.timedelta(0,2)
-            print(baseTime,currDate)
+            #print(baseTime,currDate)
             timeSort = flightDF[flightDF['datetime(utc)'].between(baseTime.strftime("%Y-%m-%d %H:%M:%S"),upperBound.strftime("%Y-%m-%d %H:%M:%S"))]
             # then sort the above timeSorted data by the relevant test tag id
             tagSort = timeSort[timeSort['TagId'].str.contains(tag)]
@@ -183,14 +198,24 @@ def associateJuneData():
                 rowVals = 0
                 for i in batch.keys():
                     # average the tag-Node RSSi value
-                    data["data"][i] = batch[i][1]/batch[i][0]
+                    if newData == True:
+                        data["data"][i] = batch[i]
+                    else:
+                        data["data"][i] = batch[i][1]/batch[i][0]
                     rowVals+=batch[i][0]
                 X.append(data)
+                if newData == True:
+                    avgAlt = tagSort["altitude_above_seaLevel(feet)"].mean()
                 # get the average latitude over the 2 seconds
                 avgLat = tagSort["latitude"].mean()
                 # get the average longitude over the 2 seconds
                 avgLong = tagSort["longitude"].mean()
-                y.append([avgLat,avgLong])
+
+                #If newData is true; then we add the altitude as well
+                if newData == True:
+                    y.append([avgLat,avgLong,avgAlt])
+                else:
+                    y.append([avgLat,avgLong])
 
                 avgNums[0]+=1
                 avgNums[1]+=rowVals
@@ -212,18 +237,34 @@ def associateJuneData():
             batch = {}
             baseTime = currDate
             tag = row[1]['TagId']
-
-        if row[1]['NodeId'] not in batch.keys():
-            batch[row[1]['NodeId']]=[0,0]
-        batch[row[1]['NodeId']][0]+=1
-        batch[row[1]['NodeId']][1]+=row[1]['TagRSSI']
+        #If the newData is true; then gather different info
+        if  newData == True:
+            if row[1]['NodeId'] not in batch.keys():
+                batch[row[1]['NodeId']]=[0,0,[]]
+                batch[row[1]['NodeId']][0] +=1
+                name = row[1]['NodeId']
+                batch[row[1]['NodeId']][1] = [nodeLocations[name]['Latitude'],nodeLocations[name]['Longitude']]
+                batch[row[1]['NodeId']][2].append(row[1]['TagRSSI'])
+            elif row[1]['NodeId'] in batch.keys():
+                batch[row[1]['NodeId']][0] +=1
+                batch[row[1]['NodeId']][2].append(row[1]['TagRSSI'])
+        #Otherwise, gather the same information
+        else:
+            if row[1]['NodeId'] not in batch.keys():
+                batch[row[1]['NodeId']]=[0,0]
+            batch[row[1]['NodeId']][0]+=1
+            batch[row[1]['NodeId']][1]+=row[1]['TagRSSI']
     # every x should have a corresponding y
     assert(len(X)==len(y))
     finalData = {}
     finalData['X']=X
     finalData['y']=y
-    """with open("../Data/June/associatedTestData.json","w+") as f:
-        json.dump(finalData, f)"""
+    if(newData == True):
+        with open("../Data/June/newData.json","w+") as f:
+            json.dump(finalData, f)
+    else:
+        with open("../Data/June/associatedTestData.json","w+") as f:
+            json.dump(finalData, f)
     print(missedTheCut,missedTheCutTooFew,missedthecutbadSort)
     print(errorDist)
     print("There were {} rows,\nof which there were {} 2 second intervals/batches with relevant data,\naveraging {} rows a batch".format(len(beepData),avgNums[0],(avgNums[1]/avgNums[0])))
@@ -319,11 +360,108 @@ def associateMarchData(month="March"):
         json.dump(data, f)
 
     return data
+def newEquationData(month="June"):
+    #I believe it would be nice to have it like this
+    #We can derive other equations from other months as well if needed
+    pathName = "../Data/"+month+"/newData.json"
+    with open(pathName,"r") as f:
+        data = json.load(f)
+
+    #signal strength -> y values
+    signalStr = []
+    #drone distance from nodes -> x values
+    distances = []
+
+    #Loop through the items in data set X
+    for index, item in enumerate(data["X"]):
+
+        #Get the keys
+        keys = item["data"].keys()
+
+        #Loop through each item in X data set
+        for key in keys:
+
+            #Set pointA to be the location of the drone
+            pointA = (data["y"][index][0],data["y"][index][1])
+
+            #Loop through the each node, to get the signal and distance
+            for i in range(0,len(item["data"][key][2])):
+
+                pointB = (item["data"][key][1][0],item["data"][key][1][1])
+
+                #Using vincenty alorithm to calculate the distance between them in km
+                #It is said to be quite accurate, metre specific accuracy
+                distance = vincenty(pointA, pointB)
+                #Exclude the useless data points
+                if(pointA == (0,0) or pointA == (0.754225181062586, -12.295563892977972) or pointA == (4.22356791831445, -68.85519277364834)): continue
+                #Otherwise we convert into meters
+                distance = distance*1000
+
+                #Set the signal
+                signal = item["data"][key][2][i]
+
+                #Add the signal value to the y values
+                signalStr.append(signal)
+
+                #Add distance to the x values
+                distances.append(distance)
+
+    #Make sure that the values are the same length; suitable for plotting
+    assert(len(signalStr) == len(distances))
+    finalData = {}
+    finalData['X']=distances
+    finalData['Y']=signalStr
+    with open("../Data/June/newEquationData.json","w+") as f:
+        json.dump(finalData, f)
+
+def deriveEquation(month="June"):
+
+    #Open the newEquationData file, rune newEquationData to get it
+    pathName = "../Data/"+month+"/newEquationData.json"
+    with open(pathName,"r") as f:
+        data = json.load(f)
+    #Create a data frame, which will be used to make a csv file
+    #and to optimize an equation
+    dataFrame = {}
+    dataFrame["Y"] = data["Y"]
+    dataFrame["X"] = data["X"]
+
+    #Creating csv file so that we can monitor it if wanted to
+    df = pd.DataFrame(dataFrame)
+    df.to_csv("../Data/June/newEqData.csv")
+
+    #Setting values to optimize the equation
+    df = pd.DataFrame({"x": data["X"], "y": data["Y"]})
+    x = np.array(df["x"])
+    y = np.array(df["y"])
+
+    # Have an initial guess as to what the values of the parameters are
+    a_guess = 47.23
+    b_guess = -0.005
+    c_guess = -105.16
+
+    # Fit the function a * np.exp(b * t) + c to x and y
+    popt, pcov = curve_fit(
+        lambda t, a, b, c: a * np.exp(b * t) + c,
+        x, y, p0=(a_guess, b_guess, c_guess)
+    )
+
+    # The optimised values of the parameters are
+    a = popt[0]
+    b = popt[1]
+    c = popt[2]
+
+    return([a,b,c])
 
 def calculateDist_2(RSSI):
     # formula from our data
-    #y = values[0]*np.log(x)+values[1]
-    dist = np.log((RSSI+102.84339991053513)/29.856227966632954)/-.0054824231026629686
+    #New values
+    #29.797940785785794, -0.00568791789392432, -102.48720932300988
+    #Old values
+    #29.856227966632954, -0.0054824231026629686, -102.84339991053513
+    #values = deriveEquation()
+    #dist = np.log((RSSI-values[2])/values[0])/values[1]
+    dist = np.log((RSSI+102.48720932300988)/29.797940785785794)/-0.00568791789392432
     return dist
 
 
@@ -335,4 +473,5 @@ def calculateDist(RSSI):
 
 
 if __name__=="__main__":
-    associateJuneData()
+    #associateJuneData(newData=True)
+    deriveEquation()

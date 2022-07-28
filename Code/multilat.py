@@ -40,6 +40,9 @@ def marchPredictions(rssiThreshold=-105.16, pruned=False, isTriLat = False):
     """
     for id in data.keys():
         freq = {}
+        distToNodes = []
+        nodeLocs = []
+        numberOfEntries = 0
         for dataEntry in data[id]["Data"]:
             if dataEntry["NodeId"]=="3288000000": dataEntry["NodeId"]="3288e6"
             if dataEntry["TagRSSI"] <=rssiThreshold or dataEntry["NodeId"] not in nodes.keys(): continue
@@ -55,9 +58,6 @@ def marchPredictions(rssiThreshold=-105.16, pruned=False, isTriLat = False):
             and the other the location of the nodes
         """
         if freq == {} or len(freq.keys())<3: continue
-        distToNodes = []
-        nodeLocs = []
-        numberOfEntries = 0
         for node in freq.keys():
             freq[node][0]/=freq[node][1]
             distToNodes.append(freq[node][0])
@@ -103,6 +103,7 @@ def junePredictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False):
         nodeLocs = []
         nodesTargeted = []
 
+
         for dataEntry in X[idx]["data"].keys():
             nodeId = dataEntry
             if X[idx]["data"][nodeId] <=rssiThreshold or nodeId not in nodes.keys(): continue
@@ -131,6 +132,86 @@ def junePredictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False):
         # Calculate the multilateration
         res = np.array(gps_solve(distToNodes, list(np.array(nodeLocs))))
         utmGT = utm.from_latlon(y[idx][0], y[idx][1])
+
+        gt = np.array([np.float64(utmGT[0]),np.float64(utmGT[1])])
+        dist = np.linalg.norm(res-gt)
+        testId = X[idx]["time"]+X[idx]["tag"]
+        results[testId] = {"gt":gt,
+                       "res":res,
+                       "error":dist,
+                       "nodeDists":distToNodes,
+                       "nodeLocs":nodeLocs}
+        if keepNodeIds:
+            results[testId]["nodeIds"] = nodesTargeted
+        averageError+=dist
+        numberOfTests+=1
+    print("Using a threshold of {} for the RSSI, with multilateration: {}, using trilateration: {}, the average error was {} m".format(rssiThreshold, not isTriLat, isTriLat, (averageError/numberOfTests)))
+    #print(numberOfTests)
+    return results
+
+#IF ACCEPTED; THEN JUNEPREDICTIONS AND marchPredictions CAN BE DELETED
+def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month="June"):
+    """ This should be combined with the March function in reality, which requires rewriting the util load data function
+        but the premise is the exact same and works the same way."""
+
+    if(month =="June"):
+        # Load in the June JSON
+        data = utils.loadData(month="June",combined=True)
+        nodes = utils.loadNodes(rewriteUTM=True)
+    if(month =="March"):
+        #Load March - new JSON
+        data = utils.loadData(month="March",combined=True)
+        nodes = utils.loadNodes(rewriteUTM=False)
+    # assign the relevant variables
+    X = data["X"]
+    y = data["y"]
+    # need to rewrite the node location using the utm module
+    # because we need the utm module for the Drone's gps
+
+    # for stats
+    numberOfTests = 0
+    averageError = 0
+    results = {}
+    currentMax = 0
+    for idx in range(len(X)):
+        # the two important lists, the distances to the nodes
+        # and the node locations themselves (with updated utm)
+        distToNodes = []
+        nodeLocs = []
+        nodesTargeted = []
+
+
+        for dataEntry in X[idx]["data"].keys():
+            nodeId = dataEntry
+            if X[idx]["data"][nodeId] <=rssiThreshold or nodeId not in nodes.keys(): continue
+            # If we're doing trilateration rather than multi, keep only the 3 lowest values
+            if isTriLat and len(distToNodes)==3 and X[idx]["data"][nodeId]>currentMax:
+                continue
+            distToNodes.append(utils.calculateDist_2(X[idx]["data"][nodeId]))
+            if dataEntry=="3288000000": nodeId="3288e6"
+            nodeLocs.append([nodes[nodeId]["NodeUTMx"],nodes[nodeId]["NodeUTMy"]])
+            if keepNodeIds:
+                nodesTargeted.append(nodeId)
+            # If we're doing trilateration rather than multi, keep only the 3 lowest values
+            if isTriLat and len(distToNodes)==4:
+                # find the maximum value and remove the index from all lists
+                ind = np.argmax(distToNodes)
+                del distToNodes[ind]
+                del nodeLocs[ind]
+                if keepNodeIds:
+                    del nodesTargeted[ind]
+            currentMax = max(distToNodes)
+
+        # need at least 3 values
+        if len(distToNodes)<3: continue
+
+        numberOfEntries = 0
+        # Calculate the multilateration
+        res = np.array(gps_solve(distToNodes, list(np.array(nodeLocs))))
+        if(month=="March"):
+            utmGT = [y[idx][0], y[idx][1]]
+        else:
+            utmGT = utm.from_latlon(y[idx][0], y[idx][1])
 
         gt = np.array([np.float64(utmGT[0]),np.float64(utmGT[1])])
         dist = np.linalg.norm(res-gt)

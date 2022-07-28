@@ -47,7 +47,7 @@ def loadBoundaries(redoUtm=False):
             minY = nodes[node]["NodeUTMy"]
     return minX,maxX,minY,maxY
 
-def loadData(month="March", pruned=False):
+def loadData(month="March", pruned=False, combined = False):
     """ Loads the data that has been stored from associateTestData,
         month specifies the month the data was taken happened (March or June)
         by default is March """
@@ -55,20 +55,26 @@ def loadData(month="March", pruned=False):
     if pruned:
         pathName+="Pruned"
     pathName+=".json"
+    #Don't want to ruin the other function just yet; so another parameter if we run the combined June-March prediction
+    if combined == True:
+        if month == "March":
+            pathName = "../Data/"+month+"/associatedMarchData_2.json"
     with open(pathName,"r") as f:
         data = json.load(f)
     return data
 
-def loadModelData(month="June", modelType="initial", threshold=-90, verbose=True):
+def loadModelData(month="June", modelType="initial", threshold=-102, verbose=True):
     """ Unlike the regular loadData function, this one presents the information in a format
         specifically for a model to train on. The way the data will differ depends on if it's initial
         (where we'll be trying to predict offsets of the calculated values) or if it's sequential, given
         n steps predict the current step"""
 
     if month=="June":
-        res = multilat.junePredictions(threshold,keepNodeIds=True)
+        #res = multilat.junePredictions(threshold,keepNodeIds=True)
+        res = multilat.predictions(threshold,keepNodeIds=True,month="June")
     else:
-        res = multilat.marchPredictions(threshold)
+        res = multilat.predictions(threshold,keepNodeIds=True,month="March")
+        #res = multilat.marchPredictions(threshold)
     rewriteUtm = False
     if month=="June":
         rewriteUtm = True
@@ -93,20 +99,22 @@ def loadModelData(month="June", modelType="initial", threshold=-90, verbose=True
         x[0] = res[entry]["gt"][0]
         x[1] = res[entry]["gt"][1]
         tmp_y = res[entry]["gt"]-res[entry]["res"]
+
         tmp_y[0] = round(tmp_y[0],1)
         tmp_y[1] = round(tmp_y[1],1)
 
         #If it is a March run, it would not have a nodeIds keys
         #Figured it is not that importnat for March rn.
-        if month =="June":
-            for nodeNum in range(len(nodeKeys)):
-                # if the node id is not one of the ones the tag contacted skip
+        for nodeNum in range(len(nodeKeys)):
+            # if the node id is not one of the ones the tag contacted skip
 
-                if nodeKeys[nodeNum] not in res[entry]["nodeIds"]: continue
-                # otherwise set the relative x value equivalent to the distance
-                nodeIdx = res[entry]["nodeIds"].index(nodeKeys[nodeNum])
+            if nodeKeys[nodeNum] not in res[entry]["nodeIds"]: continue
+            # otherwise set the relative x value equivalent to the distance
+            nodeIdx = res[entry]["nodeIds"].index(nodeKeys[nodeNum])
 
-                x[2+nodeNum] = res[entry]["nodeDists"][nodeIdx]
+            x[2+nodeNum] = res[entry]["nodeDists"][nodeIdx]
+
+
         x = np.array(x)
         tmp_y = np.array(tmp_y)
         X.append(x)
@@ -358,8 +366,55 @@ def associateMarchData(month="March"):
 
     with open("../Data/"+month+"/associatedTestDataPruned.json","w+") as f:
         json.dump(data, f)
-
     return data
+def rewriteMarchData(month="March"):
+    pathName = "../Data/"+month+"/associatedTestData.json"
+    with open(pathName,"r") as f:
+        data = json.load(f)
+    X = []
+    Y = []
+    for key in data.keys():
+        for id in data[key]:
+            #print(data[key][id])
+            if id == "GroundTruth":
+                date = data[key][id]["Date"]
+                date = date[::-1]
+                timeS = data[key][id]["Start.Time"]
+                timeE = data[key][id]["Stop.Time"]
+                dateT = date+"-"+timeS+"-"+timeE
+                tag = data[key][id]["TagId"]
+                test = data[key][id]["TestId"]
+                posX = data[key][id]["TestUTMx"]
+                posY = data[key][id]["TestUTMy"]
+            if id == "Data":
+                information = {}
+                for item in data[key][id]:
+                    if item['NodeId']=="3288000000": item['NodeId']="3288e6"
+                    if item["NodeId"] not in information.keys():
+                        information[item["NodeId"]] = [0,1]
+                        information[item["NodeId"]][0] = item["TagRSSI"]
+                    else:
+                        information[item["NodeId"]][0] += item["TagRSSI"]
+                        information[item["NodeId"]][1] += 1
+                for idX in information.keys():
+                    sum = information[idX][0]
+                    count = information[idX][1]
+                    avg = round(sum/count,2)
+                    information[idX] = avg
+        X.append({    "time" : dateT,
+                        "tag" : tag,
+                        #"testId" = test
+                        "data" : information
+        })
+        Y.append([posX,posY])
+    assert(len(X) == len(Y))
+    finalData = {}
+    finalData['X']=X
+    finalData['y']=Y
+    with open("../Data/"+month+"/associatedMarchData_2.json","w+") as f:
+        json.dump(finalData, f)
+
+
 def newEquationData(month="June"):
     #I believe it would be nice to have it like this
     #We can derive other equations from other months as well if needed
@@ -474,4 +529,8 @@ def calculateDist(RSSI):
 
 if __name__=="__main__":
     #associateJuneData(newData=True)
+    #deriveEquation()
+    #loadModelData()
+    #rewriteMarchData()
+    #print(multilat.predictions(rssiThreshold=-102,keepNodeIds=True, isTriLat = False, month="June"))
     deriveEquation()

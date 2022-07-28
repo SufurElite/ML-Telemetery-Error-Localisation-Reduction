@@ -8,10 +8,6 @@ import utils
 import json, utm
 import datetime
 import multilat
-from vincenty import vincenty
-from matplotlib import pyplot as plt
-import seaborn as sns
-from scipy.optimize import curve_fit
 
 def closestNodeCount(month="March"):
     """ This function goes over the data, specified by month, and then compares the
@@ -162,9 +158,5 @@ def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
 
 if __name__=="__main__":
     #closestNodeCount()
-    #random()
-    #dataObt()
-    print(newEquation())
-    #plotEquation()
     #compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16)
     #checkBatches()

@@ -6,8 +6,9 @@ import numpy as np
 import scipy.optimize as opt
 import utils, argparse
 import utm
-from scipy.optimize import minimize
+from scipy.optimize import minimize, least_squares
 import numpy as np
+from geopy import distance
 
 def gps_solve(distsToNodes, nodeLocations):
     """
@@ -25,6 +26,26 @@ def gps_solve(distsToNodes, nodeLocations):
     x0 = sum([W[i] * nodeLocations[i] for i in range(l)])
     # optimize distance from signal origin to border of spheres
     return minimize(error, x0, args=(nodeLocations, distsToNodes), method='Nelder-Mead').x
+'''
+    Another implementation to solve the multilateration.
+    https://github.com/koru1130/multilateration
+'''
+def residuals_fn(points, dist):
+    def fn(location):
+        return np.array( [ (dist(p, location).km - r)*(r*r) for (p, r) in points ] )
+    return fn
+
+def multilateration(points, dist_type ='geodesic'):
+    if dist_type == 'geodesic' :
+        dist = distance.distance
+    elif dist_type == 'great_circle' :
+        dist = distance.great_circle
+    else:
+        raise Exception("dist_type error")
+
+    ps = [x[0] for x in points]
+    x0 = np.mean(np.array(ps),axis=0)
+    return least_squares(residuals_fn(points, dist), x0).x
 
 
 def marchPredictions(rssiThreshold=-105.16, pruned=False, isTriLat = False):
@@ -180,6 +201,10 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
         nodeLocs = []
         nodesTargeted = []
 
+        actualDist = []
+        signals = []
+        theids = []
+
 
         for dataEntry in X[idx]["data"].keys():
             nodeId = dataEntry
@@ -190,6 +215,25 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
             distToNodes.append(utils.calculateDist_2(X[idx]["data"][nodeId]))
             if dataEntry=="3288000000": nodeId="3288e6"
             nodeLocs.append([nodes[nodeId]["NodeUTMx"],nodes[nodeId]["NodeUTMy"]])
+
+            '''
+                TESTING AREA FOR NEW FILTER
+            '''
+            nodeLocation = np.array([nodes[nodeId]["NodeUTMx"],nodes[nodeId]["NodeUTMy"]])
+            if(month=="March"):
+                utmGT = [y[idx][0], y[idx][1]]
+            else:
+                utmGT = utm.from_latlon(y[idx][0], y[idx][1])
+            gt = np.array([np.float64(utmGT[0]),np.float64(utmGT[1])])
+            aDist = np.linalg.norm(nodeLocation-gt)
+            actualDist.append(aDist)
+            signals.append(X[idx]["data"][nodeId])
+            theids.append(nodeId)
+
+            '''
+                END OF TESTING AREA
+            '''
+
             if keepNodeIds:
                 nodesTargeted.append(nodeId)
             # If we're doing trilateration rather than multi, keep only the 3 lowest values
@@ -206,8 +250,23 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
         if len(distToNodes)<3: continue
 
         numberOfEntries = 0
+
+        '''
+            Data manipulation for other tpye of multilateration; seems worse.
+        '''
+        '''
+        nls_points = []
+        for n in range(0,len(distToNodes)):
+            latlon = utm.to_latlon(nodeLocs[n][0],nodeLocs[n][1],18,'N')
+            nls_points.append(((latlon[0],latlon[1]),distToNodes[n]/1000))
+        res_2 = np.array(multilateration(nls_points))
+        res_2 = utm.from_latlon(res_2[0],res_2[1])
+        '''
+
+
         # Calculate the multilateration
         res = np.array(gps_solve(distToNodes, list(np.array(nodeLocs))))
+
         if(month=="March"):
             utmGT = [y[idx][0], y[idx][1]]
         else:
@@ -215,7 +274,78 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
 
         gt = np.array([np.float64(utmGT[0]),np.float64(utmGT[1])])
         dist = np.linalg.norm(res-gt)
+        '''
+            TESTING AREA START
+        '''
+        print("Next")
+        #print("Node loc: ", nodeLocs)
+        print("Calculated Dist: ",distToNodes)
+        #print("Signals: ",signals)
+        print("Actual Dist: ",actualDist)
+        #print("NodeIDs: ",theids)
+        #print("Actual position: ", gt)
+        #print("Predicted position: ", res)
+        print("Error: ", dist)
+        #print("\n")
+
+
+
+        errorArea = False
+        lineValues = []
+        #print("\n")
+        for k in range(0,len(nodeLocs)):
+            summing = 0
+            for j in range(0,len(nodeLocs)):
+                if(nodeLocs[k] == nodeLocs[j]): continue
+                line = np.linalg.norm(np.array(nodeLocs[k])-np.array(nodeLocs[j]))
+                summing += line
+                #print(theids[k], "to ", theids[j],": ", line)
+            lineValues.append([summing,signals[k],distToNodes[k]])
+        #print(lineValues)
+        check = None
+        newLinesValues = lineValues.copy()
+        update = utils.rewrite(lineValues, newLinesValues)
+        #print("This is DIST TO NODES: ", distToNodes)
+        if(check != update):
+            errorArea = True
+            for item in range(0,len(distToNodes)):
+                if(distToNodes[item] != update[item][2]):
+                    distToNodes[item] = update[item][2]
+                    signals[item] = update[item][1]
+        #print("THIS IS DIST TO NODES:", distToNodes)
+        #input()
+        #print("\n")
+        #print("THIS IS THE END: ", update)
+
+        if(errorArea== True):
+            #print("\n")
+            #print("There was a change!")
+            #print("\n")
+            print("Calculated Dist: ",distToNodes)
+            #print("Node loc: ", nodeLocs)
+            res = np.array(gps_solve(distToNodes, list(np.array(nodeLocs))))
+            dist = np.linalg.norm(res-gt)
+            #print("Node loc: ", nodeLocs)
+
+            #print("Signals: ",signals)
+            print("Actual Dist: ",actualDist)
+            #print("NodeIDs: ",theids)
+             #print("Actual position: ", gt)
+            #print("Predicted position: ", res)
+            print("Error: ", dist)
+        input()
+
+        '''
+            TESTING AREA END
+        '''
+
+
         testId = X[idx]["time"]+X[idx]["tag"]
+        '''
+            Delete the commenting to test it with the other type of multilateration algorithm; it seems to be worse
+        '''
+        #res= [res_2[0],res_2[1]]
+
         results[testId] = {"gt":gt,
                        "res":res,
                        "error":dist,
@@ -228,6 +358,7 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
     print("Using a threshold of {} for the RSSI, with multilateration: {}, using trilateration: {}, the average error was {} m".format(rssiThreshold, not isTriLat, isTriLat, (averageError/numberOfTests)))
     #print(numberOfTests)
     return results
+
 
 def main(args=None):
 

@@ -211,6 +211,7 @@ def associateJuneData(newData = False):
                     else:
                         data["data"][i] = batch[i][1]/batch[i][0]
                     rowVals+=batch[i][0]
+                print(data["data"])
                 X.append(data)
                 if newData == True:
                     avgAlt = tagSort["altitude_above_seaLevel(feet)"].mean()
@@ -507,6 +508,128 @@ def deriveEquation(month="June"):
     c = popt[2]
 
     return([a,b,c])
+'''
+    Part for the algorithm that tries to optimize the signal strength values - currently not working properly
+
+'''
+
+'''
+    Main function for rewriting the values. This one is a recursive function, which updates a list's distances+signalsternght if the condition holds.
+    What I found out that 1 signal strenght is roughly 1 signal difference, so that is why I tried to find it till 200m roughly.
+    There is a problem with this - if all values are way off, then this function will just worsen the situation. Again, might be good to improve this somehow, or
+    find another approach.
+'''
+def rewrite(values, valuesUpdated):
+    #Base case
+    if(len(values) == 1):
+        return valuesUpdated
+    mini, index = value_finder(values)
+
+    #If there is disonance, then does the swapping
+    if(check_dissonance(values, index) == True):
+        #print("Dissonance alert!")
+        return_index, closestDist = closest_to(values, index)
+        if(abs(values[index][1]-values[return_index][1]) > 3):
+            #print("Dissonance for sure!")
+            closestDist = abs(values[index][0] - values[return_index][0])
+            print("ClosestDistance:", closestDist)
+            negative = bool((values[index][0] - values[return_index][0]) < 0)
+            if(closestDist < 50):
+                values[index][1] = values[return_index][1]
+            elif(closestDist< 100 and closestDist>=50):
+                if(negative == True):
+                    values[index][1] = values[return_index][1] - 1
+                else:
+                    values[index][1] = values[return_index][1] + 1
+            elif(closestDist< 150 and closestDist>=100):
+                if(negative == True):
+                    values[index][1] = values[return_index][1] - 2
+                else:
+                    values[index][1] = values[return_index][1] + 2
+            elif(closestDist < 200 and closestDist>=150):
+                if(negative == True):
+                    values[index][1] = values[return_index][1] - 3
+                else:
+                    values[index][1] = values[return_index][1] + 3
+            else:
+                if(negative == True):
+                    values[index][1] = values[return_index][1] - 4
+                else:
+                    values[index][1] = values[return_index][1] + 4
+            if(values[index][1] < -102): values[index][1] = -102
+            if(values[index][1] > -73): values[index][1] = -73
+            for i in range(0,len(valuesUpdated)):
+                if(values[index][0] == valuesUpdated[i][0]):
+                    valuesUpdated[i][1] = values[index][1]
+                    valuesUpdated[i][2] = calculateDist_2(valuesUpdated[i][1])
+
+    values.remove(values[index])
+    #print("This is values updated! ",valuesUpdated)
+    #print("Values: ", values)
+    #input()
+
+    return rewrite(values, valuesUpdated)
+
+'''
+    This function checks whether there is 'dissonance' or not. Currently dissonance is defined as the following:
+        -If the signal value that is the lowest, does not have the highest sum of distances (sum of the dist that the node is away from the other nodes)
+         then there is probably a dissonance happening. Since the assumption is that if the node is the farthest away from the other nodes, then it should
+         have the lowest signal. Obviously there are cases, when this might not be true - thus there is another conditon, which is if the signal strenght
+         difference is more than 2, then we can conclude that it's probably a dissonance. Idea is currently not working, on the one hand for some reason,
+         even though the distances are optimzed and are closer to the actual distances the nodes are away from the drone, it sometimes gives an error that
+         is way off. Perhaps, gps_solve optimization does not work properly, then?? If these two methods cancel each other, then need to have a look at another
+         idea. (Currently it seems that they do cancel each other out.)
+'''
+def check_dissonance(values, index):
+    maxi = value_finder_2(values, index)
+    #print("This is maxi!", maxi)
+    #print("This is current value: ", values[index][0])
+    if(maxi > values[index][0]):
+        diss = True
+    else:
+        diss = False
+    return diss
+'''
+    This function finds the highest distance (distance means sum of the distances that the node is away from the other nodes) and returns that value
+'''
+def value_finder_2(values, index):
+    maxi = float('-inf')
+    for i in range(0,len(values)):
+        if(i == index): continue
+        if(maxi < values[i][0]):
+            maxi = values[i][0]
+    return maxi
+
+'''
+    This function finds the lowest signal value in a list and returns its index and the value
+'''
+def value_finder(values):
+    index = None
+    mini = float('inf')
+    for i in range(0,len(values)):
+        if(values[i][1] < mini):
+            mini = values[i][1]
+            index = i
+    return mini, index
+'''
+    This function
+'''
+def closest_to(values, index):
+    keepIt = []
+    for i in range(0, len(values)):
+        if(i == index): continue
+        keepIt.append([i, abs(values[i][0]-values[index][0])])
+    mini = float('inf')
+    return_index = None
+    for j in range(0, len(keepIt)):
+        if(keepIt[j][1] < mini):
+            mini = keepIt[j][1]
+            return_index = keepIt[j][0]
+    return return_index, mini
+
+'''
+    End of the Part for the new type of approach.
+'''
 
 def calculateDist_2(RSSI):
     # formula from our data
@@ -533,4 +656,4 @@ if __name__=="__main__":
     #loadModelData()
     #rewriteMarchData()
     #print(multilat.predictions(rssiThreshold=-102,keepNodeIds=True, isTriLat = False, month="June"))
-    deriveEquation()
+    associateJuneData(newData=True)

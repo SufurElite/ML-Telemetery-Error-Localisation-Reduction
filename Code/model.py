@@ -11,10 +11,13 @@ from sklearn.model_selection import train_test_split
 
 def rmseModel():
     """ Root mean squared error XGBoost trained on the june data"""
-    X, y = loadModelData(month="March",threshold=-102, verbose=False)
+    X, y = loadModelData(month="June",threshold=-102, verbose=False)
+    #XTest, YTest = loadModelData(month="March", threshold=-86, verbose=False)
+
 
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
-    X_valid, X_test, y_valid, y_test = train_test_split(X_remaining,y_remaining, test_size=0.5)
+    X_valid, X_test, y_valid, y_test = train_test_split(X_remaining, y_remaining, test_size=0.5)
+    #X_valid, X_test, y_valid, y_test = train_test_split(XTest,YTest, test_size=0.5)
 
     # Train a regressor on it
     reg = xgb.XGBRegressor(tree_method="hist", n_estimators=32)

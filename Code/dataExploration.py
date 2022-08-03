@@ -8,6 +8,7 @@ import utils
 import json, utm
 import datetime
 import multilat
+from vincenty import vincenty
 
 def closestNodeCount(month="March"):
     """ This function goes over the data, specified by month, and then compares the
@@ -104,10 +105,139 @@ def closestNodeCount(month="March"):
     print("""The number incorrectly determined by RSS->distance was {}\nThe number correctly determined by RSS->distance was {}\nThe number of second closest determined by RSS->distance was {}.\n""".format(wrongCount, approximatedCount, wasSecondClosest))
     print("Here is the dictionary of each node that was misclassified and the number of misclassifications they had with other nodes:")
     print(frequencyConfused)
-def checkBatches():
+def orderedStrengths(month="June"):
+    #I believe it would be nice to have it like this
+    #We can derive other equations from other months as well if needed
     pathName = "../Data/"+month+"/newData.json"
     with open(pathName,"r") as f:
         data = json.load(f)
+    X = []
+    y = data["y"]
+    #signal strength -> y values
+    signalStr = []
+    #drone distance from nodes -> x values
+    distances = []
+    #Errors - 0-20m, 21m-50m, 51m-75m, 75m-100m, 100m<
+    errors = [0,0,0,0,0]
+    #Loop through the items in data set X
+    for index, item in enumerate(data["X"]):
+        #Get the keys
+        keys = item["data"].keys()
+
+        #Loop through each item in X data set
+        newItems = {}
+        for key in keys:
+            add = True
+            if item["data"][key][2][0] < -102 or item["data"][key][2][0] > -73:
+                add = False
+            #Set pointA to be the location of the drone
+            pointA = (data["y"][index][0],data["y"][index][1])
+            pointB = (item["data"][key][1][0],item["data"][key][1][1])
+
+            #Using vincenty alorithm to calculate the distance between them in km
+            #It is said to be quite accurate, metre specific accuracy
+            distance = vincenty(pointA, pointB)
+            #Exclude the useless data points
+            if(pointA == (0,0) or pointA == (0.754225181062586, -12.295563892977972) or pointA == (4.22356791831445, -68.85519277364834)): continue
+            #Otherwise we convert into meters
+            distance = distance*1000
+
+            #Set the signal
+            distance = round(distance,2)
+            signal = item["data"][key][2][0]
+            if(add== True):
+                distance_2 = round(utils.calculateDist_2(signal),2)
+                replace = [signal,distance,distance_2]
+            if(add == True):
+                newItems[key] = replace
+            #item["data"][key] = replace
+        sort_orders = sorted(newItems.items(), key=lambda x: x[1][1])
+        for i in sort_orders:
+            print(i[1])
+            print(i[1][1], i[1][2])
+            if(i[1][1] > i[1][2]):
+                err = i[1][1] - i[1][2]
+                if(i[1][0] > -73):
+                    print(i)
+                    print(sort_orders)
+                    input()
+            else:
+                err = i[1][2] - i[1][1]
+            if(err > 100):
+                if(errors[4] == 0):
+                    errors[4] = {}
+                    errors[4][i[1][0]] = 1
+                else:
+                    if(i[1][0] not in errors[4].keys()):
+                        errors[4][i[1][0]] = 1
+                    else:
+                        errors[4][i[1][0]] += 1
+            elif(err <= 100 and err >75):
+                if(errors[3] == 0):
+                    errors[3] = {}
+                    errors[3][i[1][0]] = 1
+                else:
+                    if(i[1][0] not in errors[3].keys()):
+                        errors[3][i[1][0]] = 1
+                    else:
+                        errors[3][i[1][0]] += 1
+            elif(err <=75 and err > 50):
+                if(errors[2] == 0):
+                    errors[2] = {}
+                    errors[2][i[1][0]] = 1
+                else:
+                    if(i[1][0] not in errors[2].keys()):
+                        errors[2][i[1][0]] = 1
+                    else:
+                        errors[2][i[1][0]] += 1
+            elif(err <=50 and err > 25):
+                if(errors[1] == 0):
+                    errors[1] = {}
+                    errors[1][i[1][0]] = 1
+                else:
+                    if(i[1][0] not in errors[1].keys()):
+                        errors[1][i[1][0]] = 1
+                    else:
+                        errors[1][i[1][0]] += 1
+            else:
+                if(errors[0] == 0):
+                    errors[0] = {}
+                    errors[0][i[1][0]] = 1
+                else:
+                    if(i[1][0] not in errors[0].keys()):
+                        errors[0][i[1][0]] = 1
+                    else:
+                        errors[0][i[1][0]] += 1
+            print(err)
+            print(errors)
+            #input()
+        #item["data"] = sort_orders
+        #print(sort_orders)
+        #input()
+
+    #Make sure that the values are the same length; suitable for plotting
+    assert(len(signalStr) == len(distances))
+    finalData = {}
+    finalData['X']=distances
+    finalData['Y']=signalStr
+    #with open("../Data/June/newDataDistanceFiltered.json","w+") as f:
+    #    json.dump(finalData, f)
+def closest_to(number, numbers):
+    values = []
+    for i in range(0,len(numbers)):
+        values.append(abs(numbers[i] - number))
+    mini_one = float('infinity')
+    mini_two = float('infinity')
+    one = 0
+    two = 0
+    for k in range(0,len(values)):
+        if(values[k] < mini_one):
+            mini_one = values[k]
+            one = k
+        if(values[k] < mini_two and mini_one != values[k]):
+            mini_two = values[k]
+            two = k
+    return one, two
 
 def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
     """
@@ -160,3 +290,7 @@ if __name__=="__main__":
     #closestNodeCount()
     #compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16)
     #checkBatches()
+    #orderedStrengths()
+    numbers = [210,145,302]
+    number = 219
+    print(closest_to(number,numbers))

@@ -6,13 +6,16 @@ https://github.com/dmlc/xgboost/blob/master/demo/guide-python/multioutput_regres
 import numpy as np
 from matplotlib import pyplot as plt
 import xgboost as xgb
-from utils import loadModelData
+from utils import loadModelData, loadCovariateData
 from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+import pickle
 
-def rmseModel():
+def rmseModel(useCovariate=False):
     """ Root mean squared error XGBoost trained on the june data"""
-    X, y = loadModelData(month="March",threshold=-102, verbose=False)
-
+    X, y = loadModelData(month="June",threshold=-96, verbose=False, includeCovariatePred=useCovariate)
+    print(X.shape)
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
     X_valid, X_test, y_valid, y_test = train_test_split(X_remaining,y_remaining, test_size=0.5)
 
@@ -43,5 +46,37 @@ def rmseModel():
     print("The test average error is {}m with a maximum of {}".format(sum(allErrors)/len(allErrors), max(allErrors)))
     print(allErrors)
 
+def covariateTrain(saveModel=False):
+    """ Random Forest Classifier to determine the habitat given the signals in a particular location, \
+        based on march data"""
+    # https://medium.com/analytics-vidhya/evaluating-a-random-forest-model-9d165595ad56
+    X, y, origX, orig_y = loadCovariateData()
+    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, random_state=42)
+    print(X.shape)
+    print(X_train.shape)
+    print(X_test.shape)
+    # Has hyperparameters to be tuned
+    #clf = RandomForestClassifier(bootstrap=True, random_state=101, oob_score=True, n_jobs=-1)
+    clf = xgb.XGBClassifier()
+    clf.fit(X_train,y_train)
+    y_pred = clf.predict(X_test)
+    print("On all the test data")
+    getClassificationMetrics(y_test, y_pred)
+    if saveModel:
+        pickle.dump(clf, open("models/covariateClf", 'wb'))
+        print("Saved the model")
+    newYPred = clf.predict(X)
+    print("On all the data")
+    getClassificationMetrics(y, newYPred)
+    
+def getClassificationMetrics(y_test, y_pred):
+    """"""
+    print(accuracy_score(y_test, y_pred))
+    # View confusion matrix for test data and predictions
+    print(confusion_matrix(y_test, y_pred))
+    # View the classification report for test data and predictions
+    print(classification_report(y_test, y_pred))
+
 if __name__ == "__main__":
-    rmseModel()
+    rmseModel(False)
+    rmseModel(True)

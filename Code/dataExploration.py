@@ -104,18 +104,16 @@ def closestNodeCount(month="March"):
     print("""The number incorrectly determined by RSS->distance was {}\nThe number correctly determined by RSS->distance was {}\nThe number of second closest determined by RSS->distance was {}.\n""".format(wrongCount, approximatedCount, wasSecondClosest))
     print("Here is the dictionary of each node that was misclassified and the number of misclassifications they had with other nodes:")
     print(frequencyConfused)
-def checkBatches():
-    pathName = "../Data/"+month+"/newData.json"
-    with open(pathName,"r") as f:
-        data = json.load(f)
 
 def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
     """
         This function will evaluate the overall accuracy of a provided RSSI->distance function.
         The values that are collected here should indicate the overall distance error compared to reality,
         as well as the for each individual node.
-
+        
         (Right now just works with June)
+
+        This will use the harmonic mean calculation which is less sensitive to large outliers.
     """
     data = utils.loadData("June")
     nodes = utils.loadNodes(True)
@@ -126,7 +124,7 @@ def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
     totalDistanceError = [0,0]
     nodeDistErrorFreq = {}
     for node in list(nodes.keys()):
-        nodeDistErrorFreq[node] = [0,0]
+        nodeDistErrorFreq[node] = [[],0]
 
     for i in range(len(X)):
         """ determine the actual distance from the tag to each node
@@ -143,20 +141,33 @@ def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
             actualDist = np.linalg.norm(nodeLoc-gt)
             # find the approximated distance by the function provided
             approxDist = distanceFunction(X[i]["data"][dataEntry])
-            nodeDistErrorFreq[nodeId][0]+=(abs(actualDist-approxDist))
+            nodeDistErrorFreq[nodeId][0].append(abs(actualDist-approxDist))
             nodeDistErrorFreq[nodeId][1]+=1
-
-            totalDistanceError[0]+=(abs(actualDist-approxDist))
-            totalDistanceError[1]+=1
 
     print("With an RSSI threshold of {}".format(rssiThreshold))
     print("and given the provided RSSI -> distance function, the following results were obtained:")
     for node in nodeDistErrorFreq.keys():
         if nodeDistErrorFreq[node][0]==0: continue
-        print("\t{} had an average error of {}m".format(node, (nodeDistErrorFreq[node][0]/nodeDistErrorFreq[node][1])))
+        harmonicDenominator = 0
+        for givenDist in nodeDistErrorFreq[node][0]:
+            harmonicDenominator+= 1/givenDist
+        harmonicMean = nodeDistErrorFreq[node][1]/harmonicDenominator
+        
+        totalDistanceError[0]+=harmonicMean
+        totalDistanceError[1]+=1
+        print("\t{} had an harmonic mean error of {}m".format(node, harmonicMean))
     print("Thus the function had a total overall average error of {} m".format((totalDistanceError[0]/totalDistanceError[1])))
 
+def dataGridSections():
+    """ """
+    nodeLocs = utils.loadNodes(rewriteUTM=True)
+    sections = utils.loadSections()
+
+    print(nodeLocs)
+    data = utils.loadData(month="June")
+    y = data["y"]
+    print(y[0])
+    
+
 if __name__=="__main__":
-    #closestNodeCount()
-    #compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16)
-    #checkBatches()
+    dataGridBuckets()

@@ -6,16 +6,22 @@ https://github.com/dmlc/xgboost/blob/master/demo/guide-python/multioutput_regres
 import numpy as np
 from matplotlib import pyplot as plt
 import xgboost as xgb
-from utils import loadModelData, loadCovariateData, loadSections, pointToSection
+from utils import loadModelData, loadRSSModelData, loadCovariateData, loadSections, pointToSection
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-import pickle
+import pickle, utm
+from multilat import gps_solve
 from plot import plotGridWithPoints
 
-def rmseModel(useCovariate=False, sectionThreshold=50):
+def rmseModel(useCovariate=False, sectionThreshold=50, isErrorData=True):
     """ Root mean squared error XGBoost trained on the june data"""
-    X, y = loadModelData(month="June",threshold=-96, verbose=False, includeCovariatePred=useCovariate)
+    nodeLocs = None
+    y_vals = None
+    if isErrorData:
+        X, y = loadModelData(month="June",threshold=-96, verbose=False, includeCovariatePred=useCovariate)
+    else:
+        X, y = loadRSSModelData(month="June",includeCovariatePred=True)
     print(X.shape)
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
     X_valid, X_test, y_valid, y_test = train_test_split(X_remaining,y_remaining, test_size=0.5)
@@ -38,28 +44,46 @@ def rmseModel(useCovariate=False, sectionThreshold=50):
     allErrors = []
     freqErrorSections = {}
     grid, sections, nodes = loadSections()
+    
+    nodeLocs = []
+    for node in list(nodes.keys()):
+        nodeLocs.append([nodes[node]["NodeUTMx"],nodes[node]["NodeUTMy"]])
+
     freqErrorSections[-1] = []
     errorLocs = []
+    print(len(X_valid),len(X_test),len(X_train),len(X))
+    print("The total average error is {}m".format(avgError[0]/avgError[1]))
+
     for i in range(len(sections)):
         freqErrorSections[i] = []
     for idx in range(len(yTestPred)):
-        gt = np.array([np.float64(X_test[idx][0]+y_test[idx][0]), np.float64(X_test[idx][1]+y_test[idx][1])])
-        predicted = np.array([np.float64(yTestPred[idx][0]+X_test[idx][0]),np.float64(yTestPred[idx][1]+X_test[idx][1])])
+        gt = None
+        predicted = None
+        if isErrorData:
+            gt = np.array([np.float64(X_test[idx][0]+y_test[idx][0]), np.float64(X_test[idx][1]+y_test[idx][1])])
+            predicted = np.array([np.float64(yTestPred[idx][0]+X_test[idx][0]),np.float64(yTestPred[idx][1]+X_test[idx][1])])
+        else:
+            gt = gps_solve(y_test[idx],np.array(list(nodeLocs)))
+            predicted = gps_solve(yTestPred[idx],np.array(list(nodeLocs)))
         dist = np.linalg.norm(predicted-gt)
         allErrors.append(dist)
         if dist>=sectionThreshold:
-            sec = pointToSection(X_test[idx][0]+y_test[idx][0], X_test[idx][1]+y_test[idx][1], sections)
+            if isErrorData:
+                sec = pointToSection(X_test[idx][0]+y_test[idx][0], X_test[idx][1]+y_test[idx][1], sections)
+                errorLocs.append([X_test[idx][0]+y_test[idx][0], X_test[idx][1]+y_test[idx][1]])
+            else:
+                sec = pointToSection(gt[0],gt[1], sections)
+                errorLocs.append([gt[0],gt[1]])
             freqErrorSections[sec].append(dist)
-            errorLocs.append([X_test[idx][0]+y_test[idx][0], X_test[idx][1]+y_test[idx][1]])
+            
 
-    print(len(X_valid),len(X_test),len(X_train),len(X))
-    print("The total average error is {}m".format(avgError[0]/avgError[1]))
-    print("The test average error is {}m with a maximum of {}".format(sum(allErrors)/len(allErrors), max(allErrors)))
-    print(allErrors)
-    print("The Errors above {} m had the following section distribution: ".format(sectionThreshold))
+
+    print("The Errors over {} m had the following section distribution: ".format(sectionThreshold))
     for secKey in freqErrorSections.keys():
         print("{} : {}".format(secKey,freqErrorSections[secKey]))
+    print("The test average error is {}m with a maximum of {}".format(sum(allErrors)/len(allErrors), max(allErrors)))
     #plotGridWithPoints(errorLocs)
+    
 
 def covariateTrain(saveModel=False):
     """ Random Forest Classifier to determine the habitat given the signals in a particular location, \
@@ -94,4 +118,4 @@ def getClassificationMetrics(y_test, y_pred):
 
 if __name__ == "__main__":
     #rmseModel(False)
-    rmseModel(True)
+    rmseModel(useCovariate=False,isErrorData=True)

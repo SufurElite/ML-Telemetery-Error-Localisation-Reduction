@@ -262,6 +262,59 @@ def loadCovariateData(juneRadius=25, threshold=32):
     new_y = np.array(new_y)
     print("And a total of X with {} and y with {} values".format(len(newX),len(new_y)))
     return newX, new_y, X, y
+
+def loadRSSModelData(month="June",includeCovariatePred = False):
+    covariateModel = None
+    if includeCovariatePred:
+        covariateModel = loadCovariateModel()
+    
+    data = loadData(month)
+    X_vals = data["X"]
+    y_vals = data["y"]
+    assert(len(X_vals)==len(y_vals))
+    nodes = loadNodes(rewriteUTM=True)
+    nodeKeys = list(nodes.keys())
+    xInputNum = len(nodeKeys)
+    startIdx = 0
+    if includeCovariatePred:
+        xInputNum+=1
+        startIdx+=1
+    X = []
+    y = []
+    for i in range(len(X_vals)):
+        tmp_x = [0 for i in range(xInputNum)]
+        signal_X = [0 for i in range(len(nodeKeys))]
+        tmp_y = [0 for i in range(len(nodeKeys))]
+        # ground truth location 
+        tagGt = utm.from_latlon(y_vals[i][0], y_vals[i][1])        
+
+        for nodeNum in range(len(nodeKeys)):
+            nodeKey = nodeKeys[nodeNum]
+            nodeLoc = np.array([np.float64(nodes[nodeKey]["NodeUTMx"]), np.float64(nodes[nodeKey]["NodeUTMy"])])
+            tagLoc = np.array([np.float64(tagGt[0]),np.float64(tagGt[1])])
+            tmp_y[nodeNum] = np.linalg.norm(nodeLoc-tagLoc)
+            if nodeKey not in X_vals[i]["data"] or X_vals[i]["data"][nodeKey]<-102: 
+                # and then calculate this node's relative distance to the tag
+                continue
+            else:
+                # otherwise set the relative x value equivalent to the distance
+                tmp_x[startIdx+nodeNum] = calculateDist_2(X_vals[i]["data"][nodeKey])
+                signal_X[nodeNum] = X_vals[i]["data"][nodeKey]
+                #tmp_y[nodeNum] = calculateDist_2(X_vals[i]["data"][nodeKey])
+        if includeCovariatePred:
+            # will start with just ordinal but may switch to different encoding,
+            # model dependent
+            habitatPred = covariateModel.predict(np.array([signal_X]))
+            tmp_x[0] = habitatPred[0]
+        X.append(tmp_x)
+        y.append(tmp_y)
+    X = np.array(X)
+    y = np.array(y)
+    
+    print(len(X), len(y))
+    assert(len(X)==len(y))
+    
+    return X,y
     
 
 def loadModelData(month="June", modelType="initial", threshold=-102, includeCovariatePred = False, verbose=True):
@@ -273,11 +326,10 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
     if includeCovariatePred:
         covariateModel = loadCovariateModel()
     if month=="June":
-        #res = multilat.junePredictions(threshold,keepNodeIds=True)
         res = multilat.predictions(threshold,keepNodeIds=True,month="June")
     else:
         res = multilat.predictions(threshold,keepNodeIds=True,month="March")
-        #res = multilat.marchPredictions(threshold)
+        
     rewriteUtm = False
     if month=="June":
         rewriteUtm = True
@@ -306,9 +358,9 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
         x[0] = res[entry]["res"][0]
         x[1] = res[entry]["res"][1]
         tmp_y = res[entry]["gt"]-res[entry]["res"]
-        sec = pointToSection(res[entry]["gt"][0], res[entry]["gt"][1], sections)
+        """sec = pointToSection(res[entry]["gt"][0], res[entry]["gt"][1], sections)
         if sec == -1:
-            input("this isn't right!")
+            input("this isn't right!")"""
         tmp_y[0] = round(tmp_y[0],1)
         tmp_y[1] = round(tmp_y[1],1)
 
@@ -738,5 +790,5 @@ def calculateDist(RSSI):
 
 
 if __name__=="__main__":
-    loadModelData()
+    loadRSSModelData()
     

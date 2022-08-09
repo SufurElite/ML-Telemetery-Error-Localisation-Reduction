@@ -1,13 +1,79 @@
 from matplotlib import pyplot as plt
-from utils import loadData, loadNodes, loadBoundaries, deriveEquation
+from utils import loadData, loadNodes, loadBoundaries, deriveEquation, loadSections, pointToSection
 from multilat import marchPredictions, junePredictions
-import os, argparse
+import os, argparse, utm
 
 # from https://stackoverflow.com/questions/14720331/how-to-generate-random-colors-in-matplotlib
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
     return plt.cm.get_cmap(name, n)
+
+def plotNodes(rewriteUTM=True, plotSections=True, isAllData = False):
+    """ Function visualise the node locations and their relative distance to one another """
+    filePath = "/plots/Nodes/NodeSetup.png"
+    grid, sections, nodes = loadSections()
+
+    fig = plt.figure()
+    fig.set_size_inches(32, 18)
+    ax = fig.add_subplot(111)
+    nodeKeys = list(nodes.keys())
+    cmap = get_cmap(len(nodeKeys))
+    
+    for idx in range(len(nodeKeys)):
+        curX = nodes[nodeKeys[idx]]["NodeUTMx"]
+        curY = nodes[nodeKeys[idx]]["NodeUTMy"]
+        ax.text(curX, curY-10, nodeKeys[idx], fontsize=10,fontweight='heavy')
+        ax.scatter(curX, curY, c=cmap(idx), marker='o')
+
+    
+    
+    # make a set later for quicker lookup
+    alreadyDone = list()
+    for i in range(len(grid)):
+        for j in range(len(grid[i])):
+            # check if there is a value for dist to the right
+            if j!=len(grid[j])-1 and grid[i][j][1]!=0:
+                ax.arrow(nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i][j][0]]["NodeUTMy"], nodes[grid[i][j+1][0]]["NodeUTMx"]-nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i][j+1][0]]["NodeUTMy"]-nodes[grid[i][j][0]]["NodeUTMy"], head_width=0.05, head_length=0.1, color="r", ls=':')       
+                ax.text((nodes[grid[i][j+1][0]]["NodeUTMx"]+nodes[grid[i][j][0]]["NodeUTMx"])/2, (nodes[grid[i][j+1][0]]["NodeUTMy"]+nodes[grid[i][j][0]]["NodeUTMy"])/2, grid[i][j][1], fontsize=10, c='b',fontweight='heavy')
+            # check if there is a value for the dist to the top
+            if i!=0 and grid[i][j][2]!=0:
+                ax.arrow(nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i][j][0]]["NodeUTMy"], nodes[grid[i-1][j][0]]["NodeUTMx"]-nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i-1][j][0]]["NodeUTMy"]-nodes[grid[i][j][0]]["NodeUTMy"], head_width=0.05, head_length=0.1, color="r", ls=':')       
+                ax.text((nodes[grid[i-1][j][0]]["NodeUTMx"]+nodes[grid[i][j][0]]["NodeUTMx"])/2, (nodes[grid[i-1][j][0]]["NodeUTMy"]+nodes[grid[i][j][0]]["NodeUTMy"])/2, grid[i][j][2], fontsize=10, c='b',fontweight='heavy')
+    if plotSections:
+        for i in range(len(sections)):
+            ax.text((sections[i][0][0]+sections[i][1][0])/2, (sections[i][0][1]+sections[i][1][1])/2, i, fontsize=16, c='g',fontweight='heavy')
+        filePath = "/plots/Nodes/NodeSetupSections.png"
+    plt.xlabel("UTMx")
+    plt.ylabel("UTMy")
+    plt.title("The setup of the Node Grid")
+    if not isAllData:
+        plt.savefig(os.getcwd()+filePath)
+    return fig, ax, sections
+
+def plotGridWithPoints(data, isSections=True):
+    fig, ax, sections = plotNodes(True, isSections, False)
+    for point in data:
+        ax.scatter(point[0],point[1])
+    plt.show()
+
+def plotAllData(month="June", isSections=True, combined=False, onlyOutside = True):
+    fig, ax, sections = plotNodes(True, isSections, False)
+    filePath = "/plots/"+month+"/Data"
+    if isSections:
+        filePath+="WithSections"
+    if onlyOutside:
+        filePath+="OnlyOutside"
+    filePath+=".png"
+    latLongs = loadData(month)["y"]
+    for latLong in latLongs:
+        if(latLong == [0,0] or latLong == [0.754225181062586, -12.295563892977972] or latLong == [4.22356791831445, -68.85519277364834]): continue
+        utmVals = utm.from_latlon(latLong[0], latLong[1])
+        if not onlyOutside:
+            ax.scatter(utmVals[0],utmVals[1])
+        elif pointToSection(utmVals[0],utmVals[1],sections)==-1:
+            ax.scatter(utmVals[0],utmVals[1])
+    plt.savefig(os.getcwd()+filePath)
 
 def plotOriginal(month="March", threshold=-90):
     print("Plotting " + month + " with " + str(threshold) + " as a threshold")
@@ -80,7 +146,7 @@ def plotOriginal(month="March", threshold=-90):
 def plotEquation():
     # 100 linearly spaced numbers
     x = np.linspace(0,200,10000)
-    values = utils.deriveEquation()
+    values = deriveEquation()
     print(values)
     y = values[0]*np.exp(x*values[1])+values[2]
 
@@ -113,9 +179,10 @@ def main(args=None):
     return None
 
 if __name__=="__main__":
-    parser = argparse.ArgumentParser(description='Plot variables')
+    plotAllData()
+    """ parser = argparse.ArgumentParser(description='Plot variables')
     parser.add_argument('--month', dest='month', type=str, help='The month of the data you want to visualise')
     parser.add_argument('--rssi', dest='rssi', type=int, help='rssi filter for the data')
 
     args = parser.parse_args()
-    main(args)
+    main(args)"""

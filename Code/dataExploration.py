@@ -158,16 +158,24 @@ def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
         print("\t{} had an harmonic mean error of {}m".format(node, harmonicMean))
     print("Thus the function had a total overall average error of {} m".format((totalDistanceError[0]/totalDistanceError[1])))
 
-def dataGridSections():
-    """ """
-    nodeLocs = utils.loadNodes(rewriteUTM=True)
-    sections = utils.loadSections()
-
-    print(nodeLocs)
-    data = utils.loadData(month="June")
-    y = data["y"]
-    print(y[0])
+def dataGridSections(month="June"):
+    """ Check the frequency of the data from a given month in particular sectionsof the grid """
     
+    grid, sections, nodes = utils.loadSections()
+    
+    latLongs = utils.loadData(month)["y"]
+    sectionFrequency = {}
+    for i in range(len(sections.keys())):
+        sectionFrequency[i] = 0 
+    sectionFrequency[-1] = 0
+    for latLong in latLongs:
+        if(latLong == [0,0] or latLong == [0.754225181062586, -12.295563892977972] or latLong == [4.22356791831445, -68.85519277364834]): continue
+        utmVals = utm.from_latlon(latLong[0], latLong[1])
+        sectionNum = utils.pointToSection(utmVals[0], utmVals[1], sections)
+        sectionFrequency[sectionNum]+=1
+    print("The section to number of data points for the month of {} is as follows : ".format(month))
+    for sectionKey in sectionFrequency.keys():
+        print("\t{}:{}".format(sectionKey, sectionFrequency[sectionKey]))
 
 if __name__=="__main__":
-    dataGridBuckets()
+    dataGridSections()

@@ -26,10 +26,20 @@ def loadNodes(rewriteUTM=False):
         del nodes[nodesData[i]["NodeId"]]["NodeId"]
     return nodes
 
+def distBetweenNodes(node1, node2, Nodes):
+    node1Loc = np.array([np.float64(Nodes[node1]["NodeUTMx"]), np.float64(Nodes[node1]["NodeUTMy"])])
+    node2Loc = np.array([np.float64(Nodes[node2]["NodeUTMx"]),np.float64(Nodes[node2]["NodeUTMy"])])
+    dist = np.linalg.norm(node1Loc-node2Loc)
+    return dist
+
 def loadSections():
     """ Will create a dictionary of section # to coordinates of 
         each square formed within the grid """
-    nodes = loadNodes(rewriteUTM=True)
+    # going to load nodes here to perform pandas operation on them 
+    # and then rewrite the UTMs
+    # https://stackoverflow.com/questions/17141558/how-to-sort-a-dataframe-in-python-pandas-by-two-or-more-columns
+    nodes = loadNodes(True)
+    
     # for right now, assuming nodes will always be in a square shape
     length = int(math.sqrt(len(nodes.keys())))
     # the number of sections is (length-1)^2
@@ -39,14 +49,53 @@ def loadSections():
         # the second 0,0 is the Y min max
         sections[i] = [(0,0),(0,0)]
 
-    grid = [["node_id" for i in range(length)] for j in range(length)]
+    # the first number after the id will be the distance to the right, then 
+    # the left, below, then above
+    grid = [[["3290ef",0,0],["37a200",0,0],["377bc2",0,0],["37917d",0,0]],
+            [["37a5e9",0,0],["376095",0,0],["3275dd",0,0],["328b9b",0,0]],
+            [["3775bf",0,0],["37774c",0,0],["3774a7",0,0],["379611",0,0]],
+            [["3288e6",0,0],["328840",0,0],["377905",0,0],["32820a",0,0]]]
+    # Was initially automating the prepopulation of the above grid, 
+    # but due to the grid being slanted it requires a bit more work
 
     for i in range(len(grid)):
-        print(grid[i])
-    print(sections)
+        for j in range(len(grid[i])):
+            curNode = grid[i][j][0]
+            distRight = 0
+            distAbove = 0
+            if j!=len(grid[j])-1:
+                nodeRight = grid[i][j+1][0]
+                distRight = distBetweenNodes(curNode, nodeRight, nodes)
+            if i!=0:
+                nodeAbove = grid[i-1][j][0]
+                distAbove = distBetweenNodes(curNode, nodeAbove, nodes)
+            grid[i][j][1] = distRight
+            grid[i][j][2] = distAbove
+        
+    for i in range(length-1):
+        for j in range(length-1):
+            # initialize the minimum and maximum values and then 
+            # just take the min and max for each the nodes to the right and below
+            minX = nodes[grid[i][j][0]]["NodeUTMx"]
+            minY = nodes[grid[i+1][j][0]]["NodeUTMy"]
+
+            maxX = nodes[grid[i][j+1][0]]["NodeUTMx"]
+            maxY = nodes[grid[i][j][0]]["NodeUTMy"]
+            # compare the values to the only other smallest/largest on the same level
+            minX = min(minX,nodes[grid[i+1][j][0]]["NodeUTMx"])
+            minY = min(minY,nodes[grid[i+1][j+1][0]]["NodeUTMy"])
+            maxX = max(maxX,nodes[grid[i+1][j+1][0]]["NodeUTMx"])
+            maxY = max(maxY,nodes[grid[i][j+1][0]]["NodeUTMy"])
+            
+            sections[i*3+j] = [(minX,minY),(maxX, maxY)]
     
-    return sections
-    
+    return grid, sections, nodes
+
+def pointToSection(dataPointX, dataPointY, sections):
+    for i in range(len(sections)):
+        if (sections[i][0][0]<dataPointX and sections[i][0][1]<=dataPointY) and (dataPointX<=sections[i][1][0] and dataPointY<=sections[i][1][1]):
+            return i
+    return -1
 
 def convertOldUtm(oldUTMx,oldUTMy, oldNodes=[], newNodes=[]):
     """ This function will take in a March TestInfo UTMx and convert it
@@ -234,6 +283,7 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
         rewriteUtm = True
 
     nodes = loadNodes(rewriteUTM=rewriteUtm)
+    notUsed, sections, _ = loadSections()
 
     # the input to the model is going to be the calculated distance to each node
     # plus the projected output
@@ -253,10 +303,12 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
         if verbose:
             print("{}/{}".format(counter, numberOfVals))
         x = [0 for i in range(xInputNum)]
-        x[0] = res[entry]["gt"][0]
-        x[1] = res[entry]["gt"][1]
+        x[0] = res[entry]["res"][0]
+        x[1] = res[entry]["res"][1]
         tmp_y = res[entry]["gt"]-res[entry]["res"]
-
+        sec = pointToSection(res[entry]["gt"][0], res[entry]["gt"][1], sections)
+        if sec == -1:
+            input("this isn't right!")
         tmp_y[0] = round(tmp_y[0],1)
         tmp_y[1] = round(tmp_y[1],1)
 
@@ -307,6 +359,7 @@ def associateJuneData(newData = False):
     flights = ['19522D2A_flight1.csv', '19522D2A_flight2.csv', '19522D2A_flight3.csv','5552664C_flight1.csv']
 
     flightDataList = []
+    notUsed, sections, _ = loadSections()
 
     for flight in flights:
         df = pd.read_csv('../Data/June/'+flight, index_col=None, header=0)
@@ -356,8 +409,7 @@ def associateJuneData(newData = False):
             timeSort = flightDF[flightDF['datetime(utc)'].between(baseTime.strftime("%Y-%m-%d %H:%M:%S"),upperBound.strftime("%Y-%m-%d %H:%M:%S"))]
             # then sort the above timeSorted data by the relevant test tag id
             tagSort = timeSort[timeSort['TagId'].str.contains(tag)]
-
-
+            
             if len(batch.keys())>=3 and len(tagSort)!=0:
                 data = {}
                 data["time"] = baseTime.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -371,22 +423,26 @@ def associateJuneData(newData = False):
                     else:
                         data["data"][i] = batch[i][1]/batch[i][0]
                     rowVals+=batch[i][0]
-                X.append(data)
+                
                 if newData == True:
                     avgAlt = tagSort["altitude_above_seaLevel(feet)"].mean()
                 # get the average latitude over the 2 seconds
                 avgLat = tagSort["latitude"].mean()
                 # get the average longitude over the 2 seconds
                 avgLong = tagSort["longitude"].mean()
+                utmVals = utm.from_latlon(avgLat, avgLong)
+                sec = pointToSection(utmVals[0], utmVals[1], sections)
+                if sec != -1:
+                    # if the data point is actually within the grid keep it
+                    X.append(data)
+                    #If newData is true; then we add the altitude as well
+                    if newData == True:
+                        y.append([avgLat,avgLong,avgAlt])
+                    else:
+                        y.append([avgLat,avgLong])
 
-                #If newData is true; then we add the altitude as well
-                if newData == True:
-                    y.append([avgLat,avgLong,avgAlt])
-                else:
-                    y.append([avgLat,avgLong])
-
-                avgNums[0]+=1
-                avgNums[1]+=rowVals
+                    avgNums[0]+=1
+                    avgNums[1]+=rowVals
             else:
                 if tag=="5552664C":
                     errorDist[0]+=1
@@ -682,5 +738,5 @@ def calculateDist(RSSI):
 
 
 if __name__=="__main__":
-    loadSections()
+    loadModelData()
     

@@ -3,11 +3,7 @@
 """
 import numpy as np
 import pandas as pd
-import math
-import utils
-import json, utm
-import datetime
-import multilat
+import math, multilat, utils, json, utm, datetime
 
 def closestNodeCount(month="March"):
     """ This function goes over the data, specified by month, and then compares the
@@ -160,7 +156,6 @@ def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
 
 def dataGridSections(month="June"):
     """ Check the frequency of the data from a given month in particular sectionsof the grid """
-    
     grid, sections, nodes = utils.loadSections()
     
     latLongs = utils.loadData(month)["y"]
@@ -177,5 +172,38 @@ def dataGridSections(month="June"):
     for sectionKey in sectionFrequency.keys():
         print("\t{}:{}".format(sectionKey, sectionFrequency[sectionKey]))
 
+def findAvgTrueError(verbose = False):
+    """ Given all the actual distances to the nodes, 
+        calculate multilat and determine the error """
+    # Loads in data where the X is the calculated dist to each node
+    # and y is the actul dist to each node
+    X, y = utils.loadRSSModelData(month = "June")
+    # Generate the node locations in a list
+    nodes = utils.loadNodes(True)
+    nodeKeys = list(nodes.keys())
+    nodeLocs = []
+    for key in nodeKeys:
+        nodeLocs.append([nodes[key]["NodeUTMx"],nodes[key]["NodeUTMy"]])
+    
+    errors = [0,0]
+    for i in range(len(X)):
+        # get a given row of data
+        tmp_distances = X[i]
+        for j in range(len(tmp_distances)):
+            # if the node had data to a batch, set it to the actual distance
+            if tmp_distances[j]!=0:
+                tmp_distances[j] = y[i][j]
+        # calculate the estimated & actual multilats 
+        estimated = np.array(multilat.gps_solve(tmp_distances, list(np.array(nodeLocs))))
+        actual = np.array(multilat.gps_solve(y[i], list(np.array(nodeLocs))))
+        # find the difference in the predicted location
+        dist = np.linalg.norm(estimated-actual)
+        errors[0]+=dist
+        errors[1]+=1
+        if verbose:
+            print("{}, current error : {}, running average error : {}".format(i, dist, errors[0]/errors[1]))
+    # show the average error
+    print(errors[0]/errors[1])
+
 if __name__=="__main__":
-    dataGridSections()
+    findAvgTrueError()

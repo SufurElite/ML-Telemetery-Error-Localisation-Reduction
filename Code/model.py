@@ -14,7 +14,7 @@ import pickle, utm
 from multilat import gps_solve
 from plot import plotGridWithPoints
 
-def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData: bool =True, plotError: bool = False):
+def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData: bool =True, plotError: bool = True):
     """ Root mean squared error XGBoost trained on the june data 
             useCovariate : bool, refers to whether or not to include the predicted habitat with determining
             the location

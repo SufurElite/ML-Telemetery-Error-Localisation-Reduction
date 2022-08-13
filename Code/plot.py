@@ -2,6 +2,7 @@ from matplotlib import pyplot as plt
 from utils import loadData, loadNodes, loadBoundaries, deriveEquation, loadSections, pointToSection
 from multilat import marchPredictions, junePredictions
 import os, argparse, utm
+import numpy as np 
 
 # from https://stackoverflow.com/questions/14720331/how-to-generate-random-colors-in-matplotlib
 def get_cmap(n, name='hsv'):
@@ -70,7 +71,7 @@ def plotGridWithPoints(data, isSections=True):
     # show the result
     plt.show()
 
-def plotAllData(month="June", isSections=True, combined=False, onlyOutside = True):
+def plotAllData(month="June", isSections=True, combined=False, onlyOutside = False):
     # load in a fig and ax with the node grid already displayed inplace
     fig, ax, sections = plotNodes(True, isSections, True)
     # set the file path based on month and whether we're including sections and whether 
@@ -191,9 +192,10 @@ def main(args=None):
     rssiThreshold=-105.16
     if args.rssi!=None:
         rssiThreshold = args.rssi
-    if args.eq.lower()=='y':
+    
+    if args.eq!=None and args.eq.lower()=='y':
         plotEquation()
-    elif args.allData.lower()=='y':
+    elif args.allData!=None and args.allData.lower()=='y':
         plotAllData()
     elif args.month==None:
         print("Please select a month to visualise with --month month, where you can select 'march' or 'june'")
@@ -206,7 +208,7 @@ def main(args=None):
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Plot variables')
     parser.add_argument('--equation', dest='eq', type=str,help="Do you want to plot the equation? y/n")
-    parser.add_argument('--allData', dest='eq', type=str,help="Do you want to plot all the data? y/n")
+    parser.add_argument('--allData', dest='allData', type=str,help="Do you want to plot all the data? y/n")
     parser.add_argument('--month', dest='month', type=str, help='The month of the data you want to visualise')
     parser.add_argument('--rssi', dest='rssi', type=int, help='rssi filter for the data')
 

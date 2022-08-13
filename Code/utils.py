@@ -27,6 +27,7 @@ def loadNodes(rewriteUTM=False):
     return nodes
 
 def distBetweenNodes(node1, node2, Nodes):
+    """ Given 2 node ids and a dictionary of nodes this will calculate the distance between the two """
     node1Loc = np.array([np.float64(Nodes[node1]["NodeUTMx"]), np.float64(Nodes[node1]["NodeUTMy"])])
     node2Loc = np.array([np.float64(Nodes[node2]["NodeUTMx"]),np.float64(Nodes[node2]["NodeUTMy"])])
     dist = np.linalg.norm(node1Loc-node2Loc)
@@ -35,9 +36,7 @@ def distBetweenNodes(node1, node2, Nodes):
 def loadSections():
     """ Will create a dictionary of section # to coordinates of 
         each square formed within the grid """
-    # going to load nodes here to perform pandas operation on them 
-    # and then rewrite the UTMs
-    # https://stackoverflow.com/questions/17141558/how-to-sort-a-dataframe-in-python-pandas-by-two-or-more-columns
+    
     nodes = loadNodes(True)
     
     # for right now, assuming nodes will always be in a square shape
@@ -57,12 +56,15 @@ def loadSections():
             [["3288e6",0,0],["328840",0,0],["377905",0,0],["32820a",0,0]]]
     # Was initially automating the prepopulation of the above grid, 
     # but due to the grid being slanted it requires a bit more work
+    # so I did the ids manually and populated distances below
 
     for i in range(len(grid)):
         for j in range(len(grid[i])):
+            # get the current node id
             curNode = grid[i][j][0]
             distRight = 0
             distAbove = 0
+            # if we're not at the edges, get the distance to the right and above
             if j!=len(grid[j])-1:
                 nodeRight = grid[i][j+1][0]
                 distRight = distBetweenNodes(curNode, nodeRight, nodes)
@@ -71,7 +73,8 @@ def loadSections():
                 distAbove = distBetweenNodes(curNode, nodeAbove, nodes)
             grid[i][j][1] = distRight
             grid[i][j][2] = distAbove
-        
+    
+    # go through every 'section' in the grid and find the bounds for the sections
     for i in range(length-1):
         for j in range(length-1):
             # initialize the minimum and maximum values and then 
@@ -92,9 +95,12 @@ def loadSections():
     return grid, sections, nodes
 
 def pointToSection(dataPointX, dataPointY, sections):
+    """ Given a UTM X, Y value and the section dictionary with the bounds defined, return which x and y value it falls in """
+    # go over all the sections and if the X & Y values lie wtihin the sections bound, then return i
     for i in range(len(sections)):
         if (sections[i][0][0]<dataPointX and sections[i][0][1]<=dataPointY) and (dataPointX<=sections[i][1][0] and dataPointY<=sections[i][1][1]):
             return i
+    # otherwise return -1 (it's out of bounds)
     return -1
 
 def convertOldUtm(oldUTMx,oldUTMy, oldNodes=[], newNodes=[]):
@@ -103,6 +109,7 @@ def convertOldUtm(oldUTMx,oldUTMy, oldNodes=[], newNodes=[]):
     
     oldUTMs = np.array([np.float64(oldUTMx),np.float64(oldUTMy)])
 
+    # load in the new and old nodes
     if oldNodes==[]:
         oldNodes = loadNodes()
     if newNodes == []:
@@ -113,12 +120,15 @@ def convertOldUtm(oldUTMx,oldUTMy, oldNodes=[], newNodes=[]):
     oldNodeDists = []
     newNodeLocs = []
     
+    # for every node calculate the distance between the given UTMx,UTMy and the old nodes' locations
+    # and then add the same node's location but with the new utms to a list 
     for node in oldNodes.keys():
         npNodeLoc = np.array([np.float64(oldNodes[node]["NodeUTMx"]),np.float64(oldNodes[node]["NodeUTMy"])])
         dist = np.linalg.norm(oldUTMs-npNodeLoc)
         newNodeLocs.append([newNodes[node]["NodeUTMx"],newNodes[node]["NodeUTMy"]])
         oldNodeDists.append(dist)
-    
+    # once we have this data, we can calculate the location of the old utmx, utmy from the march data
+    # to a new one
     newUTMx,newUTMy = multilat.gps_solve(oldNodeDists, list(np.array(newNodeLocs)))
     return newUTMx,newUTMy
 
@@ -264,17 +274,25 @@ def loadCovariateData(juneRadius=25, threshold=32):
     return newX, new_y, X, y
 
 def loadRSSModelData(month="June",includeCovariatePred = False):
+    """ This is similar to loading model data, but the y values, instead of being offsets to correct
+        the error derived from multilat, are the distances to each node"""
+    
+    # if we want to include the habitat as a factor, then load in the classification
     covariateModel = None
     if includeCovariatePred:
         covariateModel = loadCovariateModel()
-    
+    # load in the data
     data = loadData(month)
     X_vals = data["X"]
     y_vals = data["y"]
     assert(len(X_vals)==len(y_vals))
+    # load in the nodes
     nodes = loadNodes(rewriteUTM=True)
     nodeKeys = list(nodes.keys())
     xInputNum = len(nodeKeys)
+    # starting idx is eitehr 0 or 1 if we include the habitat,
+    # but this has the opportunity to be increased later if we want to have multiple
+    # features
     startIdx = 0
     if includeCovariatePred:
         xInputNum+=1
@@ -283,6 +301,7 @@ def loadRSSModelData(month="June",includeCovariatePred = False):
     y = []
     for i in range(len(X_vals)):
         tmp_x = [0 for i in range(xInputNum)]
+        # signal_X is to be able to predict the habitat from signals
         signal_X = [0 for i in range(len(nodeKeys))]
         tmp_y = [0 for i in range(len(nodeKeys))]
         # ground truth location 
@@ -300,7 +319,7 @@ def loadRSSModelData(month="June",includeCovariatePred = False):
                 # otherwise set the relative x value equivalent to the distance
                 tmp_x[startIdx+nodeNum] = calculateDist_2(X_vals[i]["data"][nodeKey])
                 signal_X[nodeNum] = X_vals[i]["data"][nodeKey]
-                #tmp_y[nodeNum] = calculateDist_2(X_vals[i]["data"][nodeKey])
+                
         if includeCovariatePred:
             # will start with just ordinal but may switch to different encoding,
             # model dependent
@@ -358,9 +377,7 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
         x[0] = res[entry]["res"][0]
         x[1] = res[entry]["res"][1]
         tmp_y = res[entry]["gt"]-res[entry]["res"]
-        """sec = pointToSection(res[entry]["gt"][0], res[entry]["gt"][1], sections)
-        if sec == -1:
-            input("this isn't right!")"""
+        
         tmp_y[0] = round(tmp_y[0],1)
         tmp_y[1] = round(tmp_y[1],1)
 

@@ -142,6 +142,8 @@ def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
 
     print("With an RSSI threshold of {}".format(rssiThreshold))
     print("and given the provided RSSI -> distance function, the following results were obtained:")
+    # Calculate the harmonic mean of the error for the given function
+    # see https://en.wikipedia.org/wiki/Harmonic_mean
     for node in nodeDistErrorFreq.keys():
         if nodeDistErrorFreq[node][0]==0: continue
         harmonicDenominator = 0
@@ -152,19 +154,26 @@ def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
         totalDistanceError[0]+=harmonicMean
         totalDistanceError[1]+=1
         print("\t{} had an harmonic mean error of {}m".format(node, harmonicMean))
+    # we can also then see the total average error
     print("Thus the function had a total overall average error of {} m".format((totalDistanceError[0]/totalDistanceError[1])))
 
 def dataGridSections(month="June"):
     """ Check the frequency of the data from a given month in particular sectionsof the grid """
+    # load in the varying values
     grid, sections, nodes = utils.loadSections()
-    
+    # get the lat longs of the month
     latLongs = utils.loadData(month)["y"]
+    # Initialize the frequency map for each key
     sectionFrequency = {}
     for i in range(len(sections.keys())):
         sectionFrequency[i] = 0 
+    # -1 will refer to if data point is outside the grid
     sectionFrequency[-1] = 0
+    # go through all the lat longs and determine the section
     for latLong in latLongs:
+        # Ignore these particular points
         if(latLong == [0,0] or latLong == [0.754225181062586, -12.295563892977972] or latLong == [4.22356791831445, -68.85519277364834]): continue
+        # calculate the utm and then determine its section
         utmVals = utm.from_latlon(latLong[0], latLong[1])
         sectionNum = utils.pointToSection(utmVals[0], utmVals[1], sections)
         sectionFrequency[sectionNum]+=1

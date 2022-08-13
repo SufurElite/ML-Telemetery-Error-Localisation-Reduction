@@ -253,7 +253,7 @@ def main(args=None):
 
 
 if __name__=="__main__":
-    """parser = argparse.ArgumentParser(description='Multilat variables')
+    parser = argparse.ArgumentParser(description='Multilat variables')
     parser.add_argument('--month', dest='month', type=str, help='Month of the data')
     parser.add_argument('--rssi', dest='rssi', type=int, help='rssi filter for the data')
     parser.add_argument('--trilat', dest='trilat', type=bool, help='Whether we\'re using trilateration rather than multi')
@@ -261,15 +261,4 @@ if __name__=="__main__":
 
     args = parser.parse_args()
 
-    main(args)"""
-    distVals = [139.36514661268737, 251.66639359661278, 332.84733506758823, 467.2307249037879, 497.402255018978, -30.720035710814198, 183.59669646438132, 49.48957108571301, 574.6013268208152, 374.63044254629955, 377.3775337914848, 191.91804970490563, 335.5156614135692, 201.2150679665539, 461.4783215446048, 506.2362389544161]
-    nodes = utils.loadNodes(True)
-    nodeLocs = []
-    for node in list(nodes.keys()):
-        print(node)
-        nodeLocs.append([nodes[node]["NodeUTMx"],nodes[node]["NodeUTMy"]])
-    res = np.array(gps_solve(distVals, list(np.array(nodeLocs))))
-    gt = np.array([np.float64(636150.4647229746),np.float64(500397.6408068597)])
-    dist = np.linalg.norm(res-gt)
-    print(res)
-    print(dist)
+    main(args)

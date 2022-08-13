@@ -4,10 +4,7 @@
 """
 import pandas as pd
 import numpy as np
-import json, utm
-import datetime
-import multilat
-import math
+import multilat, json, utm, datetime, random, math, pickle
 from vincenty import vincenty
 from scipy.optimize import curve_fit
 
@@ -29,6 +26,112 @@ def loadNodes(rewriteUTM=False):
         del nodes[nodesData[i]["NodeId"]]["NodeId"]
     return nodes
 
+def distBetweenNodes(node1, node2, Nodes):
+    """ Given 2 node ids and a dictionary of nodes this will calculate the distance between the two """
+    node1Loc = np.array([np.float64(Nodes[node1]["NodeUTMx"]), np.float64(Nodes[node1]["NodeUTMy"])])
+    node2Loc = np.array([np.float64(Nodes[node2]["NodeUTMx"]),np.float64(Nodes[node2]["NodeUTMy"])])
+    dist = np.linalg.norm(node1Loc-node2Loc)
+    return dist
+
+def loadSections():
+    """ Will create a dictionary of section # to coordinates of 
+        each square formed within the grid """
+    
+    nodes = loadNodes(True)
+    
+    # for right now, assuming nodes will always be in a square shape
+    length = int(math.sqrt(len(nodes.keys())))
+    # the number of sections is (length-1)^2
+    sections = {}
+    for i in range((length-1)**2):
+        # the first 0,0 is the X min max, 
+        # the second 0,0 is the Y min max
+        sections[i] = [(0,0),(0,0)]
+
+    # the first number after the id will be the distance to the right, then 
+    # the left, below, then above
+    grid = [[["3290ef",0,0],["37a200",0,0],["377bc2",0,0],["37917d",0,0]],
+            [["37a5e9",0,0],["376095",0,0],["3275dd",0,0],["328b9b",0,0]],
+            [["3775bf",0,0],["37774c",0,0],["3774a7",0,0],["379611",0,0]],
+            [["3288e6",0,0],["328840",0,0],["377905",0,0],["32820a",0,0]]]
+    # Was initially automating the prepopulation of the above grid, 
+    # but due to the grid being slanted it requires a bit more work
+    # so I did the ids manually and populated distances below
+
+    for i in range(len(grid)):
+        for j in range(len(grid[i])):
+            # get the current node id
+            curNode = grid[i][j][0]
+            distRight = 0
+            distAbove = 0
+            # if we're not at the edges, get the distance to the right and above
+            if j!=len(grid[j])-1:
+                nodeRight = grid[i][j+1][0]
+                distRight = distBetweenNodes(curNode, nodeRight, nodes)
+            if i!=0:
+                nodeAbove = grid[i-1][j][0]
+                distAbove = distBetweenNodes(curNode, nodeAbove, nodes)
+            grid[i][j][1] = distRight
+            grid[i][j][2] = distAbove
+    
+    # go through every 'section' in the grid and find the bounds for the sections
+    for i in range(length-1):
+        for j in range(length-1):
+            # initialize the minimum and maximum values and then 
+            # just take the min and max for each the nodes to the right and below
+            minX = nodes[grid[i][j][0]]["NodeUTMx"]
+            minY = nodes[grid[i+1][j][0]]["NodeUTMy"]
+
+            maxX = nodes[grid[i][j+1][0]]["NodeUTMx"]
+            maxY = nodes[grid[i][j][0]]["NodeUTMy"]
+            # compare the values to the only other smallest/largest on the same level
+            minX = min(minX,nodes[grid[i+1][j][0]]["NodeUTMx"])
+            minY = min(minY,nodes[grid[i+1][j+1][0]]["NodeUTMy"])
+            maxX = max(maxX,nodes[grid[i+1][j+1][0]]["NodeUTMx"])
+            maxY = max(maxY,nodes[grid[i][j+1][0]]["NodeUTMy"])
+            
+            sections[i*3+j] = [(minX,minY),(maxX, maxY)]
+    
+    return grid, sections, nodes
+
+def pointToSection(dataPointX, dataPointY, sections):
+    """ Given a UTM X, Y value and the section dictionary with the bounds defined, return which x and y value it falls in """
+    # go over all the sections and if the X & Y values lie wtihin the sections bound, then return i
+    for i in range(len(sections)):
+        if (sections[i][0][0]<dataPointX and sections[i][0][1]<=dataPointY) and (dataPointX<=sections[i][1][0] and dataPointY<=sections[i][1][1]):
+            return i
+    # otherwise return -1 (it's out of bounds)
+    return -1
+
+def convertOldUtm(oldUTMx,oldUTMy, oldNodes=[], newNodes=[]):
+    """ This function will take in a March TestInfo UTMx and convert it
+        to a UTM relative to the new UTM nodes"""
+    
+    oldUTMs = np.array([np.float64(oldUTMx),np.float64(oldUTMy)])
+
+    # load in the new and old nodes
+    if oldNodes==[]:
+        oldNodes = loadNodes()
+    if newNodes == []:
+        newNodes = loadNodes(True)
+    
+    # calculate the relative distance to each of the old nodes, but save
+    # the location from the new nodes, and then calculate the new utmx, utmy
+    oldNodeDists = []
+    newNodeLocs = []
+    
+    # for every node calculate the distance between the given UTMx,UTMy and the old nodes' locations
+    # and then add the same node's location but with the new utms to a list 
+    for node in oldNodes.keys():
+        npNodeLoc = np.array([np.float64(oldNodes[node]["NodeUTMx"]),np.float64(oldNodes[node]["NodeUTMy"])])
+        dist = np.linalg.norm(oldUTMs-npNodeLoc)
+        newNodeLocs.append([newNodes[node]["NodeUTMx"],newNodes[node]["NodeUTMy"]])
+        oldNodeDists.append(dist)
+    # once we have this data, we can calculate the location of the old utmx, utmy from the march data
+    # to a new one
+    newUTMx,newUTMy = multilat.gps_solve(oldNodeDists, list(np.array(newNodeLocs)))
+    return newUTMx,newUTMy
+
 def loadBoundaries(redoUtm=False):
     """ Will return the boundaries of the node system """
     nodes = loadNodes(rewriteUTM=redoUtm)
@@ -47,6 +150,12 @@ def loadBoundaries(redoUtm=False):
             minY = nodes[node]["NodeUTMy"]
     return minX,maxX,minY,maxY
 
+
+def loadCovariateModel():
+    """ Used to load in the Classifier for the prediction model """
+    loadedModel = pickle.load(open("models/covariateClf", 'rb'))
+    return loadedModel
+
 def loadData(month="March", pruned=False, combined = False):
     """ Loads the data that has been stored from associateTestData,
         month specifies the month the data was taken happened (March or June)
@@ -63,30 +172,199 @@ def loadData(month="March", pruned=False, combined = False):
         data = json.load(f)
     return data
 
-def loadModelData(month="June", modelType="initial", threshold=-102, verbose=True):
+def loadCovariateData(juneRadius=25, threshold=32):
+    """ Using the additional features from the march data, 
+        initially we can try using ordinal number values for the habitats """
+    # load in the test info to find the habitat type
+    df = pd.read_csv(r'../Data/March/TestInfo.csv')
+    habitats = list(df.habitat_type.unique())
+    data = loadData("March")
+    # Load old and new node data for converting the old UTMs to new
+    oldNodes = loadNodes()
+    newNodes = loadNodes(True)
+    """ Will create a dictionary of the locations from the march associated Test Data gt
+        and then any points from june that falls into a radius of 10m (arbitrarily chosen) 
+            - if there are multiple points within this radius, the closest one will be selected as 
+            the same habitat type
+        """
+    locationToHabitat = {}
+
+    nodes = list(newNodes.keys())
+    values = {}
+    for i in range(len(habitats)):
+        values[i] = []
+    X = []
+    y = []
+    
+    for key in data.keys():
+        habIdx = habitats.index(data[key]["GroundTruth"]["habitat_type"])
+
+        convertedUTMx, convertedUTMy = convertOldUtm(data[key]["GroundTruth"]["TestUTMx"],data[key]["GroundTruth"]["TestUTMy"],oldNodes,newNodes)
+        locationToHabitat[(convertedUTMx, convertedUTMy)]=habIdx
+        tmp_x = [[0,0] for i in range(len(nodes))]
+        for dataEntry in data[key]["Data"]:
+            nodeKey = dataEntry["NodeId"]
+            if nodeKey=="3288000000": nodeKey="3288e6"
+            nodeIdx = nodes.index(nodeKey)
+            assert(nodeKey==nodes[nodeIdx])
+            tmp_x[nodeIdx][0]+=dataEntry["TagRSSI"]
+            tmp_x[nodeIdx][1]+=1
+        # then average the values in this 2 minute time span
+        x = [0 for i in range(len(nodes))]
+        for i in range(len(tmp_x)):
+            if tmp_x[i][1]==0:continue
+            x[i]=tmp_x[i][0]/tmp_x[i][1]
+        
+        
+        assert(data[key]["GroundTruth"]["habitat_type"]==habitats[habIdx])
+        y.append(habIdx)
+        X.append(x)
+        values[habIdx].append(x)
+    assert(len(X)==len(y))
+    print("From the march data, X has {} and y has {} values".format(len(X),len(y)))
+    # now load in the June data
+    juneData = loadData(month="June")
+    juneX = juneData["X"]
+    june_y = juneData["y"]
+    assert(len(juneX)==len(june_y))
+    
+    for i in range(len(juneX)):
+        # first we will check if the current data point is within range of one of the locationHabitats
+        juneUTM = utm.from_latlon(june_y[i][0], june_y[i][1])
+        npJuneUTM = np.array([np.float64(juneUTM[0]),np.float64(juneUTM[1])])
+        tmp_y = -1
+        # set the smallestDist the radius, so when we compare other distances
+        # initially it will take whichever but will eventually be the smallest dist
+        smallestDist = juneRadius
+        for habitatLoc in locationToHabitat.keys():
+            habitatUTM = np.array([np.float64(habitatLoc[0]),np.float64(habitatLoc[1])])
+            dist = np.linalg.norm(habitatUTM-npJuneUTM)
+            if dist<smallestDist:
+                tmp_y = locationToHabitat[habitatLoc]
+                smallestDist = dist
+        if tmp_y==-1: continue
+        # and then find the X data the similar to how had done before
+        tmp_x = [0 for i in range(len(nodes))]
+        for nodeEntry in juneX[i]["data"].keys():
+            nodeKey = nodeEntry
+            if nodeKey=="3288000000": nodeKey="3288e6"
+            nodeIdx = nodes.index(nodeKey)
+            assert(nodeKey==nodes[nodeIdx])
+            tmp_x[nodeIdx]=juneX[i]["data"][nodeEntry]
+        X.append(tmp_x)
+        y.append(tmp_y)
+        values[tmp_y].append(tmp_x)
+    print("After the June data with a radius of {}, X has {} and y has {} values".format(juneRadius,len(X),len(y)))
+    
+    print("The distribution of values before modification is")
+    for key in values.keys():
+        print(habitats[key],len(values[key]))
+        if(len(values[key])>threshold):
+            values[key] = random.sample(values[key],threshold)
+    print("After selecting a max threshold we get")
+    newX = []
+    new_y = []
+    for key in values.keys():
+        newX+=values[key]
+        new_y+=[key for i in range(len(values[key]))]
+        print(habitats[key],len(values[key]))
+    newX = np.array(newX)
+    new_y = np.array(new_y)
+    print("And a total of X with {} and y with {} values".format(len(newX),len(new_y)))
+    return newX, new_y, X, y
+
+def loadRSSModelData(month="June",includeCovariatePred = False):
+    """ This is similar to loading model data, but the y values, instead of being offsets to correct
+        the error derived from multilat, are the distances to each node"""
+    
+    # if we want to include the habitat as a factor, then load in the classification
+    covariateModel = None
+    if includeCovariatePred:
+        covariateModel = loadCovariateModel()
+    # load in the data
+    data = loadData(month)
+    X_vals = data["X"]
+    y_vals = data["y"]
+    assert(len(X_vals)==len(y_vals))
+    # load in the nodes
+    nodes = loadNodes(rewriteUTM=True)
+    nodeKeys = list(nodes.keys())
+    xInputNum = len(nodeKeys)
+    # starting idx is eitehr 0 or 1 if we include the habitat,
+    # but this has the opportunity to be increased later if we want to have multiple
+    # features
+    startIdx = 0
+    if includeCovariatePred:
+        xInputNum+=1
+        startIdx+=1
+    X = []
+    y = []
+    for i in range(len(X_vals)):
+        tmp_x = [0 for i in range(xInputNum)]
+        # signal_X is to be able to predict the habitat from signals
+        signal_X = [0 for i in range(len(nodeKeys))]
+        tmp_y = [0 for i in range(len(nodeKeys))]
+        # ground truth location 
+        tagGt = utm.from_latlon(y_vals[i][0], y_vals[i][1])        
+
+        for nodeNum in range(len(nodeKeys)):
+            nodeKey = nodeKeys[nodeNum]
+            nodeLoc = np.array([np.float64(nodes[nodeKey]["NodeUTMx"]), np.float64(nodes[nodeKey]["NodeUTMy"])])
+            tagLoc = np.array([np.float64(tagGt[0]),np.float64(tagGt[1])])
+            tmp_y[nodeNum] = np.linalg.norm(nodeLoc-tagLoc)
+            if nodeKey not in X_vals[i]["data"] or X_vals[i]["data"][nodeKey]<-102: 
+                # and then calculate this node's relative distance to the tag
+                continue
+            else:
+                # otherwise set the relative x value equivalent to the distance
+                tmp_x[startIdx+nodeNum] = calculateDist_2(X_vals[i]["data"][nodeKey])
+                signal_X[nodeNum] = X_vals[i]["data"][nodeKey]
+                
+        if includeCovariatePred:
+            # will start with just ordinal but may switch to different encoding,
+            # model dependent
+            habitatPred = covariateModel.predict(np.array([signal_X]))
+            tmp_x[0] = habitatPred[0]
+        X.append(tmp_x)
+        y.append(tmp_y)
+    X = np.array(X)
+    y = np.array(y)
+    
+    print(len(X), len(y))
+    assert(len(X)==len(y))
+    
+    return X,y
+    
+
+def loadModelData(month="June", modelType="initial", threshold=-102, includeCovariatePred = False, verbose=True):
     """ Unlike the regular loadData function, this one presents the information in a format
         specifically for a model to train on. The way the data will differ depends on if it's initial
         (where we'll be trying to predict offsets of the calculated values) or if it's sequential, given
         n steps predict the current step"""
-
+    covariateModel = None
+    if includeCovariatePred:
+        covariateModel = loadCovariateModel()
     if month=="June":
-        #res = multilat.junePredictions(threshold,keepNodeIds=True)
         res = multilat.predictions(threshold,keepNodeIds=True,month="June")
     else:
         res = multilat.predictions(threshold,keepNodeIds=True,month="March")
-        #res = multilat.marchPredictions(threshold)
+        
     rewriteUtm = False
     if month=="June":
         rewriteUtm = True
 
     nodes = loadNodes(rewriteUTM=rewriteUtm)
+    notUsed, sections, _ = loadSections()
 
     # the input to the model is going to be the calculated distance to each node
     # plus the projected output
     nodeKeys = list(nodes.keys())
 
     xInputNum = len(nodeKeys)+2
-
+    startIdx = 2
+    if includeCovariatePred:
+        xInputNum+=1
+        startIdx+=1
     X = []
     y = []
 
@@ -95,11 +373,11 @@ def loadModelData(month="June", modelType="initial", threshold=-102, verbose=Tru
     for entry in res.keys():
         if verbose:
             print("{}/{}".format(counter, numberOfVals))
-        x = [0 for i in range(xInputNum+2)]
-        x[0] = res[entry]["gt"][0]
-        x[1] = res[entry]["gt"][1]
+        x = [0 for i in range(xInputNum)]
+        x[0] = res[entry]["res"][0]
+        x[1] = res[entry]["res"][1]
         tmp_y = res[entry]["gt"]-res[entry]["res"]
-
+        
         tmp_y[0] = round(tmp_y[0],1)
         tmp_y[1] = round(tmp_y[1],1)
 
@@ -112,8 +390,12 @@ def loadModelData(month="June", modelType="initial", threshold=-102, verbose=Tru
             # otherwise set the relative x value equivalent to the distance
             nodeIdx = res[entry]["nodeIds"].index(nodeKeys[nodeNum])
 
-            x[2+nodeNum] = res[entry]["nodeDists"][nodeIdx]
-
+            x[startIdx+nodeNum] = res[entry]["nodeDists"][nodeIdx]
+        if includeCovariatePred:
+            # will start with just ordinal but may switch to different encoding,
+            # model dependent
+            habitatPred = covariateModel.predict(np.array([x[startIdx:]]))
+            x[2] = habitatPred[0]
 
         x = np.array(x)
         tmp_y = np.array(tmp_y)
@@ -133,8 +415,7 @@ def associateJuneData(newData = False):
         It associates the TestIds and its data with the rows
 
         Of the beepdata, currently uses 10,927 rows for 707 batches ~ 15.4 rows a batch
-        seems like there must be an error
-        """
+        seems like there must be an error """
 
     if(newData == True):
         #print("Running the new data!")
@@ -147,6 +428,7 @@ def associateJuneData(newData = False):
     flights = ['19522D2A_flight1.csv', '19522D2A_flight2.csv', '19522D2A_flight3.csv','5552664C_flight1.csv']
 
     flightDataList = []
+    notUsed, sections, _ = loadSections()
 
     for flight in flights:
         df = pd.read_csv('../Data/June/'+flight, index_col=None, header=0)
@@ -196,8 +478,7 @@ def associateJuneData(newData = False):
             timeSort = flightDF[flightDF['datetime(utc)'].between(baseTime.strftime("%Y-%m-%d %H:%M:%S"),upperBound.strftime("%Y-%m-%d %H:%M:%S"))]
             # then sort the above timeSorted data by the relevant test tag id
             tagSort = timeSort[timeSort['TagId'].str.contains(tag)]
-
-
+            
             if len(batch.keys())>=3 and len(tagSort)!=0:
                 data = {}
                 data["time"] = baseTime.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -211,22 +492,26 @@ def associateJuneData(newData = False):
                     else:
                         data["data"][i] = batch[i][1]/batch[i][0]
                     rowVals+=batch[i][0]
-                X.append(data)
+                
                 if newData == True:
                     avgAlt = tagSort["altitude_above_seaLevel(feet)"].mean()
                 # get the average latitude over the 2 seconds
                 avgLat = tagSort["latitude"].mean()
                 # get the average longitude over the 2 seconds
                 avgLong = tagSort["longitude"].mean()
+                utmVals = utm.from_latlon(avgLat, avgLong)
+                sec = pointToSection(utmVals[0], utmVals[1], sections)
+                if sec != -1:
+                    # if the data point is actually within the grid keep it
+                    X.append(data)
+                    #If newData is true; then we add the altitude as well
+                    if newData == True:
+                        y.append([avgLat,avgLong,avgAlt])
+                    else:
+                        y.append([avgLat,avgLong])
 
-                #If newData is true; then we add the altitude as well
-                if newData == True:
-                    y.append([avgLat,avgLong,avgAlt])
-                else:
-                    y.append([avgLat,avgLong])
-
-                avgNums[0]+=1
-                avgNums[1]+=rowVals
+                    avgNums[0]+=1
+                    avgNums[1]+=rowVals
             else:
                 if tag=="5552664C":
                     errorDist[0]+=1
@@ -510,12 +795,6 @@ def deriveEquation(month="June"):
 
 def calculateDist_2(RSSI):
     # formula from our data
-    #New values
-    #29.797940785785794, -0.00568791789392432, -102.48720932300988
-    #Old values
-    #29.856227966632954, -0.0054824231026629686, -102.84339991053513
-    #values = deriveEquation()
-    #dist = np.log((RSSI-values[2])/values[0])/values[1]
     dist = np.log((RSSI+102.48720932300988)/29.797940785785794)/-0.00568791789392432
     return dist
 
@@ -528,9 +807,5 @@ def calculateDist(RSSI):
 
 
 if __name__=="__main__":
-    #associateJuneData(newData=True)
-    #deriveEquation()
-    #loadModelData()
-    #rewriteMarchData()
-    #print(multilat.predictions(rssiThreshold=-102,keepNodeIds=True, isTriLat = False, month="June"))
-    deriveEquation()
+    loadRSSModelData()
+    

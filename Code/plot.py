@@ -193,6 +193,8 @@ def main(args=None):
         rssiThreshold = args.rssi
     if args.eq.lower()=='y':
         plotEquation()
+    elif args.allData.lower()=='y':
+        plotAllData()
     elif args.month==None:
         print("Please select a month to visualise with --month month, where you can select 'march' or 'june'")
     elif args.month.lower()=="march":
@@ -202,9 +204,9 @@ def main(args=None):
     return None
 
 if __name__=="__main__":
-    plotAllData()
     parser = argparse.ArgumentParser(description='Plot variables')
     parser.add_argument('--equation', dest='eq', type=str,help="Do you want to plot the equation? y/n")
+    parser.add_argument('--allData', dest='eq', type=str,help="Do you want to plot all the data? y/n")
     parser.add_argument('--month', dest='month', type=str, help='The month of the data you want to visualise')
     parser.add_argument('--rssi', dest='rssi', type=int, help='rssi filter for the data')
 

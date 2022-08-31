@@ -181,12 +181,12 @@ def dataGridSections(month="June"):
     for sectionKey in sectionFrequency.keys():
         print("\t{}:{}".format(sectionKey, sectionFrequency[sectionKey]))
 
-def findAvgTrueError(verbose = False):
+def findAvgTrueError(verbose = False, approximated=False):
     """ Given all the actual distances to the nodes, 
         calculate multilat and determine the error """
     # Loads in data where the X is the calculated dist to each node
     # and y is the actul dist to each node
-    X, y = utils.loadRSSModelData(month = "June")
+    X, y = utils.loadRSSModelData(month = "June", isAllDists=True)
     # Generate the node locations in a list
     nodes = utils.loadNodes(True)
     nodeKeys = list(nodes.keys())
@@ -197,13 +197,23 @@ def findAvgTrueError(verbose = False):
     errors = [0,0]
     for i in range(len(X)):
         # get a given row of data
-        tmp_distances = X[i]
-        for j in range(len(tmp_distances)):
+        tmp_distances = []
+        tmp_node_distances = []
+        for j in range(len(X[i])):
             # if the node had data to a batch, set it to the actual distance
-            if tmp_distances[j]!=0:
-                tmp_distances[j] = y[i][j]
+            if approximated and X[i][j]!=0:
+                tmp_distances.append(X[i][j])
+                tmp_node_distances.append(nodeLocs[j])
+            elif approximated:
+                pass
+                #tmp_distances.append(y[i][j])
+            elif not approximated and X[i][j]!=0:
+                tmp_distances.append(y[i][j])
+                tmp_node_distances.append(nodeLocs[j])
+        """if approximated:
+            tmp_node_distances = nodeLocs"""
         # calculate the estimated & actual multilats 
-        estimated = np.array(multilat.gps_solve(tmp_distances, list(np.array(nodeLocs))))
+        estimated = np.array(multilat.gps_solve(tmp_distances, list(np.array(tmp_node_distances))))
         actual = np.array(multilat.gps_solve(y[i], list(np.array(nodeLocs))))
         # find the difference in the predicted location
         dist = np.linalg.norm(estimated-actual)
@@ -215,4 +225,4 @@ def findAvgTrueError(verbose = False):
     print(errors[0]/errors[1])
 
 if __name__=="__main__":
-    findAvgTrueError()
+    findAvgTrueError(approximated=True)

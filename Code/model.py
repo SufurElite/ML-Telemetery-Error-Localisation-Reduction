@@ -14,8 +14,43 @@ import pickle, utm
 from multilat import gps_solve
 from kmlInterface import HabitatMap, Habitat
 from plot import plotGridWithPoints
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from scikeras.wrappers import KerasRegressor
+from sklearn.model_selection import RepeatedKFold
+import tensorflow as tf 
 
-def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData: bool =True, useErrorBars: bool = False, useColorScale: bool = True, plotError: bool = True, useThresholdError: bool = False, sameNodeColor: bool = False):
+def get_model(n_inputs, n_outputs):
+	model = Sequential()
+	model.add(Dense(20, input_dim=n_inputs, kernel_initializer='he_uniform', activation='relu'))
+	model.add(Dense(n_outputs))
+	model.compile(loss='mse', metrics=[tf.keras.metrics.RootMeanSquaredError()], optimizer='adam')
+	return model
+
+def simpleKeras(useCovariate: bool =False, sectionThreshold: int =50, plotError: bool = True, isAllDists: bool =False,isRSS: bool = False):
+    X, y = loadRSSModelData(month="June",includeCovariatePred=useCovariate, isAllDists=isAllDists, isRSS=isRSS)
+    n_inputs = X.shape[1]
+    n_outputs = y.shape[1]
+
+    results = []
+    cv = RepeatedKFold(n_splits=10, n_repeats=3, random_state=1)
+	# enumerate folds
+    for train_ix, test_ix in cv.split(X):
+        # prepare data
+        X_train, X_test = X[train_ix], X[test_ix]
+        y_train, y_test = y[train_ix], y[test_ix]
+        # define model
+        model = get_model(n_inputs, n_outputs)
+        # fit model
+        model.fit(X_train, y_train, verbose=1, epochs=10000)
+        # evaluate model on test set
+        vals = model.evaluate(X_test, y_test, verbose=0)
+        # store result
+        print(vals)
+        results.append(vals)
+    print(results)
+
+def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData: bool =True, useErrorBars: bool = False, useColorScale: bool = True, plotError: bool = True, isAllDists: bool =False,isRSS: bool = False, useThresholdError: bool = False, sameNodeColor: bool = False):
     """ Root mean squared error XGBoost trained on the june data 
             useCovariate : bool, refers to whether or not to include the predicted habitat with determining
             the location
@@ -27,7 +62,10 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     if isErrorData:
         X, y = loadModelData(month="June",threshold=-96, verbose=False, includeCovariatePred=useCovariate)
     else:
-        X, y = loadRSSModelData(month="June",includeCovariatePred=True)
+        X, y = loadRSSModelData(month="June",includeCovariatePred=useCovariate, isAllDists=isAllDists, isRSS=isRSS)
+    startIdx = 0
+    if useCovariate:
+        startIdx = 1
     
     # Split the data into train, test, and validation sets
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)

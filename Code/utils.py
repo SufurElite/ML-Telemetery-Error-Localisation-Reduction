@@ -261,7 +261,7 @@ def loadCovariateData():
     
     return X, y
 
-def loadRSSModelData(month="June",includeCovariatePred = False):
+def loadRSSModelData(month="June",includeCovariatePred = False, isAllDists=False, isRSS = False):
     """ This is similar to loading model data, but the y values, instead of being offsets to correct
         the error derived from multilat, are the distances to each node"""
     
@@ -286,8 +286,10 @@ def loadRSSModelData(month="June",includeCovariatePred = False):
     if includeCovariatePred:
         xInputNum+=1
         startIdx+=1
+
     X = []
     y = []
+    
     for i in range(len(X_vals)):
         tmp_x = [0 for i in range(xInputNum)]
         # signal_X is to be able to predict the habitat from signals

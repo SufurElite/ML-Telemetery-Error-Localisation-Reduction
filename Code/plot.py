@@ -1,4 +1,5 @@
 from matplotlib import pyplot as plt
+from matplotlib import colors
 from matplotlib.patches import Polygon as MatplotPoly
 from utils import loadData, loadNodes, loadBoundaries, deriveEquation, loadSections, pointToSection
 from multilat import marchPredictions, junePredictions
@@ -15,7 +16,7 @@ def get_cmap(n, name='hsv'):
 def getSharpColors():
     return ["firebrick","darkgreen","blueviolet", "darkmagenta", "darkorange"]
 
-def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllData = False):
+def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllData = False, sameNodeColor: bool = False):
     """ Function visualise the node locations and their relative distance to one another """
     # if we are going to save the node setup, this should be the relative file path
     filePath = "/plots/Nodes/NodeSetup.png"
@@ -36,7 +37,10 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
         curX = nodes[nodeKeys[idx]]["NodeUTMx"]
         curY = nodes[nodeKeys[idx]]["NodeUTMy"]
         ax.text(curX, curY-10, nodeKeys[idx], fontsize=10,fontweight='heavy')
-        ax.scatter(curX, curY, c=cmap(idx), marker='o')
+        if not sameNodeColor:
+            ax.scatter(curX, curY, c=cmap(idx), marker='o')
+        else:
+            ax.scatter(curX, curY, c='magenta', marker='o')
 
     # Now go through the grid and plot the relative distances between each node of form (i,j)
     for i in range(len(grid)):
@@ -68,7 +72,7 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
                 pts = np.array(habitatPointLists[idx])
                 p = MatplotPoly(pts, facecolor=habColors[hab_idx], alpha=.2, label=habitats[hab_idx]+"_"+str(idx))
                 ax.add_patch(p)
-        ax.legend()
+        ax.legend(fontsize='small')
 
     # add the axis labels and the title
     plt.xlabel("UTMx")
@@ -79,16 +83,23 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
     # if we're not just saving the file return the fig, ax, sections for further plotting
     return fig, ax, sections
 
-def plotGridWithPoints(data, isSections=True, plotHabitats=False, imposeLimits = True):
+def plotGridWithPoints(data, isSections=True, plotHabitats=False, imposeLimits = True, colorScale:bool = False, useErrorBars: bool = False, errors: list = None, sameNodeColor: bool = False):
     """ This takes in a list of data points to be plotted on the grid 
         and whether or not you want to see the sections in the grid too
         and plots accordingly """
     # Get the plot fig, ax and sections from plotNodes as a base
-    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True)
+    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True, sameNodeColor)
     
+    if colorScale:
+        cmap = plt.cm.get_cmap('Greys')
+        norm = colors.Normalize(vmin=0, vmax=max(errors))
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        fig.colorbar(sm)
+
     minX, maxX, minY, maxY = None, None, None, None
     # then plot all the data points on top of it
-    for point in data:
+    for pointIdx in range(len(data)):
+        point = data[pointIdx]
         if imposeLimits:
             if minX == None:
                 minX, maxX = point[0], point[0]
@@ -101,16 +112,21 @@ def plotGridWithPoints(data, isSections=True, plotHabitats=False, imposeLimits =
                 minY = point[1]
             if point[1]>maxY:
                 maxY = point[1]
-        ax.scatter(point[0],point[1])
+        if not colorScale:
+            ax.scatter(point[0],point[1], c='black')
+            if useErrorBars:
+                ax.errorbar(point[0],point[1],xerr=errors[pointIdx][0],yerr=errors[pointIdx][1],ecolor='red')
+        else:
+            ax.scatter(point[0],point[1], c=cmap(norm(errors[pointIdx])))
     if imposeLimits:
         plt.xlim((minX-50,maxX+50))
         plt.ylim((minY-50, maxY+50))
     # show the result
     plt.show()
 
-def plotAllData(month="June", isSections=True, plotHabitats=True, imposeLimits=True, combined=False, onlyOutside = False):
+def plotAllData(month="June", isSections=True, plotHabitats=True, imposeLimits=True, combined=False, onlyOutside = False, sameNodeColor: bool = False):
     # load in a fig and ax with the node grid already displayed inplace
-    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True)
+    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True, sameNodeColor=sameNodeColor)
     # set the file path based on month and whether we're including sections and whether 
     # only we're showing values outside the grid
     filePath = "/plots/"+month+"/Data"

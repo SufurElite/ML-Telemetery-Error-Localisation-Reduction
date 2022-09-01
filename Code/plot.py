@@ -1,8 +1,10 @@
 from matplotlib import pyplot as plt
+from matplotlib.patches import Polygon as MatplotPoly
 from utils import loadData, loadNodes, loadBoundaries, deriveEquation, loadSections, pointToSection
 from multilat import marchPredictions, junePredictions
 import os, argparse, utm
 import numpy as np 
+from kmlInterface import HabitatMap, Habitat
 
 # from https://stackoverflow.com/questions/14720331/how-to-generate-random-colors-in-matplotlib
 def get_cmap(n, name='hsv'):
@@ -10,13 +12,16 @@ def get_cmap(n, name='hsv'):
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
     return plt.cm.get_cmap(name, n)
 
-def plotNodes(rewriteUTM=True, plotSections=True, isAllData = False):
+def getSharpColors():
+    return ["firebrick","darkgreen","blueviolet", "darkmagenta", "darkorange"]
+
+def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllData = False):
     """ Function visualise the node locations and their relative distance to one another """
     # if we are going to save the node setup, this should be the relative file path
     filePath = "/plots/Nodes/NodeSetup.png"
     # load in all the related values
     grid, sections, nodes = loadSections()
-
+    habMap = HabitatMap()
     # plot variables
     fig = plt.figure()
     fig.set_size_inches(32, 18)
@@ -25,6 +30,7 @@ def plotNodes(rewriteUTM=True, plotSections=True, isAllData = False):
     # for each node key we want to have a different color
     nodeKeys = list(nodes.keys())
     cmap = get_cmap(len(nodeKeys))
+    
     # plot each node as a different color, with its id 10 below
     for idx in range(len(nodeKeys)):
         curX = nodes[nodeKeys[idx]]["NodeUTMx"]
@@ -50,6 +56,20 @@ def plotNodes(rewriteUTM=True, plotSections=True, isAllData = False):
             ax.text((sections[i][0][0]+sections[i][1][0])/2, (sections[i][0][1]+sections[i][1][1])/2, i, fontsize=16, c='g',fontweight='heavy')
         # update the filepath accordingly to show for sections
         filePath = "/plots/Nodes/NodeSetupSections.png"
+    
+    # if we're plotting the habitat polygons go through each and add a colour scheme
+    if plotHabitats:
+        habColors = getSharpColors()
+        habitats = habMap.getHabitats()
+        for hab_idx in range(len(habitats)):
+            hab = habMap.getHabitat(habitats[hab_idx])
+            habitatPointLists = hab.getCoordinates()
+            for idx in range(len(habitatPointLists)):
+                pts = np.array(habitatPointLists[idx])
+                p = MatplotPoly(pts, facecolor=habColors[hab_idx], alpha=.2, label=habitats[hab_idx]+"_"+str(idx))
+                ax.add_patch(p)
+        ax.legend()
+
     # add the axis labels and the title
     plt.xlabel("UTMx")
     plt.ylabel("UTMy")
@@ -59,21 +79,38 @@ def plotNodes(rewriteUTM=True, plotSections=True, isAllData = False):
     # if we're not just saving the file return the fig, ax, sections for further plotting
     return fig, ax, sections
 
-def plotGridWithPoints(data, isSections=True):
+def plotGridWithPoints(data, isSections=True, plotHabitats=False, imposeLimits = True):
     """ This takes in a list of data points to be plotted on the grid 
         and whether or not you want to see the sections in the grid too
         and plots accordingly """
     # Get the plot fig, ax and sections from plotNodes as a base
-    fig, ax, sections = plotNodes(True, isSections, True)
+    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True)
+    
+    minX, maxX, minY, maxY = None, None, None, None
     # then plot all the data points on top of it
     for point in data:
+        if imposeLimits:
+            if minX == None:
+                minX, maxX = point[0], point[0]
+                minY, maxY = point[1], point[1]
+            if point[0]<minX:
+                minX = point[0]
+            if point[0]>maxX:
+                maxX = point[0]
+            if point[1]<minY:
+                minY = point[1]
+            if point[1]>maxY:
+                maxY = point[1]
         ax.scatter(point[0],point[1])
+    if imposeLimits:
+        plt.xlim((minX-50,maxX+50))
+        plt.ylim((minY-50, maxY+50))
     # show the result
     plt.show()
 
-def plotAllData(month="June", isSections=True, combined=False, onlyOutside = False):
+def plotAllData(month="June", isSections=True, plotHabitats=True, imposeLimits=True, combined=False, onlyOutside = False):
     # load in a fig and ax with the node grid already displayed inplace
-    fig, ax, sections = plotNodes(True, isSections, True)
+    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True)
     # set the file path based on month and whether we're including sections and whether 
     # only we're showing values outside the grid
     filePath = "/plots/"+month+"/Data"
@@ -84,17 +121,35 @@ def plotAllData(month="June", isSections=True, combined=False, onlyOutside = Fal
     filePath+=".png"
     # load in all the data lat longs
     latLongs = loadData(month)["y"]
+    minX, maxX, minY, maxY = None, None, None, None
+
     # plot each data point in lat longs
     for latLong in latLongs:
         # Ignore any lat long that falls into this area
         if(latLong == [0,0] or latLong == [0.754225181062586, -12.295563892977972] or latLong == [4.22356791831445, -68.85519277364834]): continue
         # find the utm of this data point
         utmVals = utm.from_latlon(latLong[0], latLong[1])
+        if imposeLimits:
+            if minX == None:
+                minX, maxX = utmVals[0], utmVals[0]
+                minY, maxY = utmVals[1], utmVals[1]
+            if utmVals[0]<minX:
+                minX = utmVals[0]
+            if utmVals[0]>maxX:
+                maxX = utmVals[0]
+            if utmVals[1]<minY:
+                minY = utmVals[1]
+            if utmVals[1]>maxY:
+                maxY = utmVals[1]
+            
         # if we only want to plot the outside values, check for the values in -1 sections
         if not onlyOutside:
             ax.scatter(utmVals[0],utmVals[1])
         elif pointToSection(utmVals[0],utmVals[1],sections)==-1:
             ax.scatter(utmVals[0],utmVals[1])
+    if imposeLimits:
+        plt.xlim((minX-50,maxX+50))
+        plt.ylim((minY-50, maxY+50))
     plt.savefig(os.getcwd()+filePath)
 
 def plotOriginal(month="March", threshold=-90):

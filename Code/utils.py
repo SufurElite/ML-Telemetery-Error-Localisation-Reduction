@@ -98,7 +98,7 @@ def pointToSection(dataPointX, dataPointY, sections):
     """ Given a UTM X, Y value and the section dictionary with the bounds defined, return which x and y value it falls in """
     # go over all the sections and if the X & Y values lie wtihin the sections bound, then return i
     for i in range(len(sections)):
-        if (sections[i][0][0]<dataPointX and sections[i][0][1]<=dataPointY) and (dataPointX<=sections[i][1][0] and dataPointY<=sections[i][1][1]):
+        if (sections[i][0][0]<=dataPointX and sections[i][0][1]<=dataPointY) and (dataPointX<=sections[i][1][0] and dataPointY<=sections[i][1][1]):
             return i
     # otherwise return -1 (it's out of bounds)
     return -1
@@ -418,8 +418,8 @@ def associateJuneData(newData = False):
         seems like there must be an error """
 
     if(newData == True):
-        #print("Running the new data!")
         nodeLocations = loadNodes(rewriteUTM=True)
+
     # Load the June BeepData in
     beepData = pd.read_csv(r'../Data/June/BeepData.csv')
     # sort the data by tag and time, so that as we increment we can group them together in ~2 second intervals
@@ -807,5 +807,5 @@ def calculateDist(RSSI):
 
 
 if __name__=="__main__":
-    loadRSSModelData()
+    associateJuneData()
     

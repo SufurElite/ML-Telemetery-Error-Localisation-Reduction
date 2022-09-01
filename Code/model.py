@@ -107,7 +107,7 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     print("The test average error is {}m with a maximum of {}".format(sum(allErrors)/len(allErrors), max(allErrors)))
     # determine whether to plot all the error locations
     if plotError:
-        plotGridWithPoints(errorLocs)
+        plotGridWithPoints(errorLocs,isSections=True,plotHabitats=True,imposeLimits=True)
     
 
 def covariateTrain(saveModel=False):
@@ -149,4 +149,4 @@ def getClassificationMetrics(y_test, y_pred):
     print(classification_report(y_test, y_pred))
 
 if __name__ == "__main__":
-    rmseModel(useCovariate=False,isErrorData=True)
+    rmseModel(useCovariate=False,isErrorData=False,plotError=True)

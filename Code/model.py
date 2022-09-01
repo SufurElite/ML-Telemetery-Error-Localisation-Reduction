@@ -100,9 +100,10 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
         dist = np.linalg.norm(predicted-gt)
         errorDirections.append([predicted[0]-gt[0],predicted[1]-gt[1]])
         allErrors.append(dist)
-        # if the distance is greater than or equal to the threshold, add it to the section frequency map
+        # if we're not using the threshold or if the distance is >= threshold, 
+        # collect the section and habitat frequencies
         if not useThresholdError or dist>=sectionThreshold:
-            # store the values in section and error location again based on the format of the data
+            # store the values in section & habitat and error location again based on the format of the data
             if isErrorData:
                 sec = pointToSection(X_test[idx][0]+y_test[idx][0], X_test[idx][1]+y_test[idx][1], sections)
                 errorLocs.append([X_test[idx][0]+y_test[idx][0], X_test[idx][1]+y_test[idx][1]])
@@ -125,7 +126,7 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     
     for secKey in freqErrorSections.keys():
         print("{} : {}".format(secKey,freqErrorSections[secKey]))
-    
+    # Display the habitat frequency errors
     if useThresholdError:
         print("The test errors over {} m had the following habitat distribution: ".format(sectionThreshold))
     else:
@@ -185,5 +186,4 @@ def getClassificationMetrics(y_test, y_pred):
     print(classification_report(y_test, y_pred))
 
 if __name__ == "__main__":
-    #covariateTrain()
     rmseModel(useCovariate=True,isErrorData=False,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)

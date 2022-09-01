@@ -14,6 +14,7 @@ def get_cmap(n, name='hsv'):
     return plt.cm.get_cmap(name, n)
 
 def getSharpColors():
+    """ List of nice colors for the habitat polygons on the map """
     return ["firebrick","darkgreen","blueviolet", "darkmagenta", "darkorange"]
 
 def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllData = False, sameNodeColor: bool = False):
@@ -37,6 +38,7 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
         curX = nodes[nodeKeys[idx]]["NodeUTMx"]
         curY = nodes[nodeKeys[idx]]["NodeUTMy"]
         ax.text(curX, curY-10, nodeKeys[idx], fontsize=10,fontweight='heavy')
+        # we can either have a random color for each node or have them all set to one
         if not sameNodeColor:
             ax.scatter(curX, curY, c=cmap(idx), marker='o')
         else:
@@ -61,13 +63,16 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
         # update the filepath accordingly to show for sections
         filePath = "/plots/Nodes/NodeSetupSections.png"
     
-    # if we're plotting the habitat polygons go through each and add a colour scheme
+    # if we're plotting the habitat polygons go through each and add a color scheme
     if plotHabitats:
         habColors = getSharpColors()
         habitats = habMap.getHabitats()
+        # go through every habitat
         for hab_idx in range(len(habitats)):
             hab = habMap.getHabitat(habitats[hab_idx])
+            # retrieve the all the lists of points for the habitat on the outside of the polygon
             habitatPointLists = hab.getCoordinates()
+            # go through each list and add the polygon to the plot
             for idx in range(len(habitatPointLists)):
                 pts = np.array(habitatPointLists[idx])
                 p = MatplotPoly(pts, facecolor=habColors[hab_idx], alpha=.2, label=habitats[hab_idx]+"_"+str(idx))
@@ -77,9 +82,11 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
     # add the axis labels and the title
     plt.xlabel("UTMx")
     plt.ylabel("UTMy")
-    plt.title("The setup of the Node Grid")
+    
     if not isAllData:
+        plt.title("The setup of the Node Grid")
         plt.savefig(os.getcwd()+filePath)
+    
     # if we're not just saving the file return the fig, ax, sections for further plotting
     return fig, ax, sections
 
@@ -90,16 +97,19 @@ def plotGridWithPoints(data, isSections=True, plotHabitats=False, imposeLimits =
     # Get the plot fig, ax and sections from plotNodes as a base
     fig, ax, sections = plotNodes(True, isSections, plotHabitats, True, sameNodeColor)
     
+    # Normalize the scale of the color to the maximum error
     if colorScale:
         cmap = plt.cm.get_cmap('Greys')
         norm = colors.Normalize(vmin=0, vmax=max(errors))
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        # add the colorbar
         fig.colorbar(sm)
 
     minX, maxX, minY, maxY = None, None, None, None
     # then plot all the data points on top of it
     for pointIdx in range(len(data)):
         point = data[pointIdx]
+        # find the largest and smallest values for the limits of the plot
         if imposeLimits:
             if minX == None:
                 minX, maxX = point[0], point[0]
@@ -112,6 +122,8 @@ def plotGridWithPoints(data, isSections=True, plotHabitats=False, imposeLimits =
                 minY = point[1]
             if point[1]>maxY:
                 maxY = point[1]
+        # plot accordingly - whether with just the points, 
+        # error bars, or with the color scale
         if not colorScale:
             ax.scatter(point[0],point[1], c='black')
             if useErrorBars:
@@ -145,6 +157,7 @@ def plotAllData(month="June", isSections=True, plotHabitats=True, imposeLimits=T
         if(latLong == [0,0] or latLong == [0.754225181062586, -12.295563892977972] or latLong == [4.22356791831445, -68.85519277364834]): continue
         # find the utm of this data point
         utmVals = utm.from_latlon(latLong[0], latLong[1])
+        # find the largest and smallest values for the limits of the plot
         if imposeLimits:
             if minX == None:
                 minX, maxX = utmVals[0], utmVals[0]

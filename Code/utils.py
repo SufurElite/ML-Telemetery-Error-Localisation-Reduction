@@ -7,6 +7,7 @@ import numpy as np
 import multilat, json, utm, datetime, random, math, pickle
 from vincenty import vincenty
 from scipy.optimize import curve_fit
+from kmlInterface import HabitatMap, Habitat
 
 def loadNodes(rewriteUTM=False):
     """ Loads in the nodes from the CSV and returns it as a dictionary where the key is its NodeId"""
@@ -98,7 +99,7 @@ def pointToSection(dataPointX, dataPointY, sections):
     """ Given a UTM X, Y value and the section dictionary with the bounds defined, return which x and y value it falls in """
     # go over all the sections and if the X & Y values lie wtihin the sections bound, then return i
     for i in range(len(sections)):
-        if (sections[i][0][0]<dataPointX and sections[i][0][1]<=dataPointY) and (dataPointX<=sections[i][1][0] and dataPointY<=sections[i][1][1]):
+        if (sections[i][0][0]<=dataPointX and sections[i][0][1]<=dataPointY) and (dataPointX<=sections[i][1][0] and dataPointY<=sections[i][1][1]):
             return i
     # otherwise return -1 (it's out of bounds)
     return -1
@@ -172,12 +173,12 @@ def loadData(month="March", pruned=False, combined = False):
         data = json.load(f)
     return data
 
-def loadCovariateData(juneRadius=25, threshold=32):
+def loadCovariateData():
     """ Using the additional features from the march data, 
         initially we can try using ordinal number values for the habitats """
-    # load in the test info to find the habitat type
-    df = pd.read_csv(r'../Data/March/TestInfo.csv')
-    habitats = list(df.habitat_type.unique())
+    
+    # load in the habitat map
+    habitatMap = HabitatMap()
     data = loadData("March")
     # Load old and new node data for converting the old UTMs to new
     oldNodes = loadNodes()
@@ -186,21 +187,19 @@ def loadCovariateData(juneRadius=25, threshold=32):
         and then any points from june that falls into a radius of 10m (arbitrarily chosen) 
             - if there are multiple points within this radius, the closest one will be selected as 
             the same habitat type
-        """
-    locationToHabitat = {}
-
+    """
     nodes = list(newNodes.keys())
-    values = {}
-    for i in range(len(habitats)):
-        values[i] = []
+    habitatDist = {}
+
     X = []
     y = []
     
     for key in data.keys():
-        habIdx = habitats.index(data[key]["GroundTruth"]["habitat_type"])
-
+        # convert the old utm values to new
         convertedUTMx, convertedUTMy = convertOldUtm(data[key]["GroundTruth"]["TestUTMx"],data[key]["GroundTruth"]["TestUTMy"],oldNodes,newNodes)
-        locationToHabitat[(convertedUTMx, convertedUTMy)]=habIdx
+        # use the habitat index to determine the value
+        habIdx, habitatName = habitatMap.whichHabitat(convertedUTMx, convertedUTMy)
+        if habIdx==-1: continue
         tmp_x = [[0,0] for i in range(len(nodes))]
         for dataEntry in data[key]["Data"]:
             nodeKey = dataEntry["NodeId"]
@@ -215,11 +214,12 @@ def loadCovariateData(juneRadius=25, threshold=32):
             if tmp_x[i][1]==0:continue
             x[i]=tmp_x[i][0]/tmp_x[i][1]
         
-        
-        assert(data[key]["GroundTruth"]["habitat_type"]==habitats[habIdx])
         y.append(habIdx)
         X.append(x)
-        values[habIdx].append(x)
+        if habitatName not in habitatDist:
+            habitatDist[habitatName] = 0
+        habitatDist[habitatName]+=1
+
     assert(len(X)==len(y))
     print("From the march data, X has {} and y has {} values".format(len(X),len(y)))
     # now load in the June data
@@ -229,21 +229,13 @@ def loadCovariateData(juneRadius=25, threshold=32):
     assert(len(juneX)==len(june_y))
     
     for i in range(len(juneX)):
-        # first we will check if the current data point is within range of one of the locationHabitats
+        # get the june utm values
         juneUTM = utm.from_latlon(june_y[i][0], june_y[i][1])
-        npJuneUTM = np.array([np.float64(juneUTM[0]),np.float64(juneUTM[1])])
-        tmp_y = -1
-        # set the smallestDist the radius, so when we compare other distances
-        # initially it will take whichever but will eventually be the smallest dist
-        smallestDist = juneRadius
-        for habitatLoc in locationToHabitat.keys():
-            habitatUTM = np.array([np.float64(habitatLoc[0]),np.float64(habitatLoc[1])])
-            dist = np.linalg.norm(habitatUTM-npJuneUTM)
-            if dist<smallestDist:
-                tmp_y = locationToHabitat[habitatLoc]
-                smallestDist = dist
-        if tmp_y==-1: continue
-        # and then find the X data the similar to how had done before
+        # use the habitat index to determine the value
+        habIdx, habitatName = habitatMap.whichHabitat(juneUTM[0], juneUTM[1])
+
+        if habIdx==-1: continue
+        
         tmp_x = [0 for i in range(len(nodes))]
         for nodeEntry in juneX[i]["data"].keys():
             nodeKey = nodeEntry
@@ -252,26 +244,22 @@ def loadCovariateData(juneRadius=25, threshold=32):
             assert(nodeKey==nodes[nodeIdx])
             tmp_x[nodeIdx]=juneX[i]["data"][nodeEntry]
         X.append(tmp_x)
-        y.append(tmp_y)
-        values[tmp_y].append(tmp_x)
-    print("After the June data with a radius of {}, X has {} and y has {} values".format(juneRadius,len(X),len(y)))
+        y.append(habIdx)
+        if habitatName not in habitatDist:
+            habitatDist[habitatName] = 0
+        habitatDist[habitatName]+=1
+
+    print("After applying the covariate habitat map, X has {} and y has {} values".format(len(X),len(y)))
     
-    print("The distribution of values before modification is")
-    for key in values.keys():
-        print(habitats[key],len(values[key]))
-        if(len(values[key])>threshold):
-            values[key] = random.sample(values[key],threshold)
-    print("After selecting a max threshold we get")
-    newX = []
-    new_y = []
-    for key in values.keys():
-        newX+=values[key]
-        new_y+=[key for i in range(len(values[key]))]
-        print(habitats[key],len(values[key]))
-    newX = np.array(newX)
-    new_y = np.array(new_y)
-    print("And a total of X with {} and y with {} values".format(len(newX),len(new_y)))
-    return newX, new_y, X, y
+    print("The distribution of habitat values is ")
+    for habKey in habitatDist.keys():
+        print(habKey,habitatDist[habKey])
+    
+    X = np.array(X)
+    y = np.array(y)
+    assert(len(X)==len(y))
+    
+    return X, y
 
 def loadRSSModelData(month="June",includeCovariatePred = False):
     """ This is similar to loading model data, but the y values, instead of being offsets to correct
@@ -279,6 +267,7 @@ def loadRSSModelData(month="June",includeCovariatePred = False):
     
     # if we want to include the habitat as a factor, then load in the classification
     covariateModel = None
+    habitatMap = HabitatMap()
     if includeCovariatePred:
         covariateModel = loadCovariateModel()
     # load in the data
@@ -290,7 +279,7 @@ def loadRSSModelData(month="June",includeCovariatePred = False):
     nodes = loadNodes(rewriteUTM=True)
     nodeKeys = list(nodes.keys())
     xInputNum = len(nodeKeys)
-    # starting idx is eitehr 0 or 1 if we include the habitat,
+    # starting idx is either 0 or 1 if we include the habitat,
     # but this has the opportunity to be increased later if we want to have multiple
     # features
     startIdx = 0
@@ -323,8 +312,11 @@ def loadRSSModelData(month="June",includeCovariatePred = False):
         if includeCovariatePred:
             # will start with just ordinal but may switch to different encoding,
             # model dependent
-            habitatPred = covariateModel.predict(np.array([signal_X]))
-            tmp_x[0] = habitatPred[0]
+            #habitatPred, habitat_title = habitatMap.whichHabitat(tagGt[0], tagGt[1])
+            #if habitatPred==-1:
+            habitatPred = covariateModel.predict(np.array([signal_X]))[0]
+            
+            tmp_x[0] = habitatPred
         X.append(tmp_x)
         y.append(tmp_y)
     X = np.array(X)
@@ -418,8 +410,8 @@ def associateJuneData(newData = False):
         seems like there must be an error """
 
     if(newData == True):
-        #print("Running the new data!")
         nodeLocations = loadNodes(rewriteUTM=True)
+
     # Load the June BeepData in
     beepData = pd.read_csv(r'../Data/June/BeepData.csv')
     # sort the data by tag and time, so that as we increment we can group them together in ~2 second intervals
@@ -807,5 +799,4 @@ def calculateDist(RSSI):
 
 
 if __name__=="__main__":
-    loadRSSModelData()
-    
+    loadCovariateData()

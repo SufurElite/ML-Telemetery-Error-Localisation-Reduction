@@ -12,9 +12,10 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 import pickle, utm
 from multilat import gps_solve
+from kmlInterface import HabitatMap, Habitat
 from plot import plotGridWithPoints
 
-def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData: bool =True, plotError: bool = True):
+def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData: bool =True, useErrorBars: bool = False, useColorScale: bool = True, plotError: bool = True, useThresholdError: bool = False, sameNodeColor: bool = False):
     """ Root mean squared error XGBoost trained on the june data 
             useCovariate : bool, refers to whether or not to include the predicted habitat with determining
             the location
@@ -57,12 +58,14 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     yTestPred = reg.predict(X_test)
     
     # we want to find all the error values as well
-    # as their respective locations
+    # as their respective locations and habitats
     allErrors = []
     freqErrorSections = {}
+    freqErrorHabitats = {}
     # want to load in the section nodes
     grid, sections, nodes = loadSections()
-    
+    # load in the habitat
+    habitatMap = HabitatMap()
     # determine the different node locations in the order derived from list(nodes.keys()) - order matters
     nodeLocs = []
     for node in list(nodes.keys()):
@@ -70,11 +73,19 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     
     # errorLocs will contain all the locations of the errors to plot
     errorLocs = []
-    
+    # errorDirections will have the error in both the x and y direction
+    errorDirections = []
+
     # assign the section ids and outside grid value
     for i in range(len(sections)):
         freqErrorSections[i] = []
     freqErrorSections[-1] = []
+
+    # assign the habitat values and outside grid value
+    habitat_titles = habitatMap.getHabitats()
+    for habitat_title in habitat_titles:
+        freqErrorHabitats[habitat_title] = []
+    freqErrorHabitats[-1] = []
 
     for idx in range(len(yTestPred)):
         gt = None
@@ -87,40 +98,66 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
             gt = gps_solve(y_test[idx],np.array(list(nodeLocs)))
             predicted = gps_solve(yTestPred[idx],np.array(list(nodeLocs)))
         dist = np.linalg.norm(predicted-gt)
+        errorDirections.append([predicted[0]-gt[0],predicted[1]-gt[1]])
         allErrors.append(dist)
-        # if the distance is greater than or equal to the threshold, add it to the section frequency map
-        if dist>=sectionThreshold:
-            # store the values in section and error location again based on the format of the data
+        # if we're not using the threshold or if the distance is >= threshold, 
+        # collect the section and habitat frequencies
+        if not useThresholdError or dist>=sectionThreshold:
+            # store the values in section & habitat and error location again based on the format of the data
             if isErrorData:
                 sec = pointToSection(X_test[idx][0]+y_test[idx][0], X_test[idx][1]+y_test[idx][1], sections)
                 errorLocs.append([X_test[idx][0]+y_test[idx][0], X_test[idx][1]+y_test[idx][1]])
+                habIdx, habitatName = habitatMap.whichHabitat(X_test[idx][0]+y_test[idx][0], X_test[idx][1]+y_test[idx][1])
             else:
                 sec = pointToSection(gt[0],gt[1], sections)
                 errorLocs.append([gt[0],gt[1]])
+                habIdx, habitatName = habitatMap.whichHabitat(gt[0], gt[1])
+            if habIdx!=-1:
+                freqErrorHabitats[habitatName].append(dist)
+            else:
+                freqErrorHabitats[habIdx].append(dist)
             freqErrorSections[sec].append(dist)
     
     # Display the section frequency errors
-    print("The Errors over {} m had the following section distribution: ".format(sectionThreshold))
+    if useThresholdError:
+        print("The test errors over {} m had the following section distribution: ".format(sectionThreshold))
+    else:
+        print("The test errors had the following section distribution: ")
+    
     for secKey in freqErrorSections.keys():
         print("{} : {}".format(secKey,freqErrorSections[secKey]))
+    # Display the habitat frequency errors
+    if useThresholdError:
+        print("The test errors over {} m had the following habitat distribution: ".format(sectionThreshold))
+    else:
+        print("The test errors had the following habitat distribution: ")
+    
+    for habKey in freqErrorHabitats.keys():
+        print("{} : {}".format(habKey,freqErrorHabitats[habKey]))
+    
     # And print the average test error
     print("The test average error is {}m with a maximum of {}".format(sum(allErrors)/len(allErrors), max(allErrors)))
     # determine whether to plot all the error locations
     if plotError:
-        plotGridWithPoints(errorLocs)
+        if useErrorBars:
+            plotGridWithPoints(errorLocs,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=True, errors=errorDirections, sameNodeColor=sameNodeColor)
+        elif useColorScale:
+            plotGridWithPoints(errorLocs,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = True, errors=allErrors, sameNodeColor=sameNodeColor)
+        else:
+            plotGridWithPoints(errorLocs,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = False, errors=None, sameNodeColor=sameNodeColor)
     
 
 def covariateTrain(saveModel=False):
     """ Creates a Classifier to determine the habitat given the signals in a particular location,
         based on march data"""
     # load in the data for the covariate training
-    X, y, origX, orig_y = loadCovariateData()
+    X, y = loadCovariateData()
     # Split the data for evluatoin
     X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, random_state=42)
     
     # Has hyperparameters to be tuned
-    # clf = RandomForestClassifier(bootstrap=True, random_state=101, oob_score=True, n_jobs=-1)
-    clf = xgb.XGBClassifier()
+    clf = RandomForestClassifier(bootstrap=True, random_state=101, oob_score=True, n_jobs=-1)
+    #clf = xgb.XGBClassifier()
     # train on the data
     clf.fit(X_train,y_train)
     # predict on the test set
@@ -149,4 +186,4 @@ def getClassificationMetrics(y_test, y_pred):
     print(classification_report(y_test, y_pred))
 
 if __name__ == "__main__":
-    rmseModel(useCovariate=False,isErrorData=True)
+    rmseModel(useCovariate=True,isErrorData=False,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)

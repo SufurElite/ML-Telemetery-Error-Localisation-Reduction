@@ -114,13 +114,13 @@ def covariateTrain(saveModel=False):
     """ Creates a Classifier to determine the habitat given the signals in a particular location,
         based on march data"""
     # load in the data for the covariate training
-    X, y, origX, orig_y = loadCovariateData()
+    X, y = loadCovariateData()
     # Split the data for evluatoin
     X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, random_state=42)
     
     # Has hyperparameters to be tuned
-    # clf = RandomForestClassifier(bootstrap=True, random_state=101, oob_score=True, n_jobs=-1)
-    clf = xgb.XGBClassifier()
+    clf = RandomForestClassifier(bootstrap=True, random_state=101, oob_score=True, n_jobs=-1)
+    #clf = xgb.XGBClassifier()
     # train on the data
     clf.fit(X_train,y_train)
     # predict on the test set
@@ -149,4 +149,5 @@ def getClassificationMetrics(y_test, y_pred):
     print(classification_report(y_test, y_pred))
 
 if __name__ == "__main__":
-    rmseModel(useCovariate=False,isErrorData=False,plotError=True)
+    #covariateTrain()
+    rmseModel(useCovariate=True,isErrorData=False,plotError=True)

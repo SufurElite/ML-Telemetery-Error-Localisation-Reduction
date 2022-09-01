@@ -84,10 +84,10 @@ class HabitatMap():
             the point lies within
         """
         for idx in range(len(self.habitats)):
-            if self.habitats[i].isInside(UTMx, UTMy):
-                return idx, self.HABITAT_TYPES[i]
+            if self.habitats[idx].isInside(UTMx, UTMy):
+                return idx, self.HABITAT_TYPES[idx]
         # if no value is found, return -1
-        return -1
+        return -1, None
 
     def getHabitat(self, habitat_title) -> Habitat:
         """

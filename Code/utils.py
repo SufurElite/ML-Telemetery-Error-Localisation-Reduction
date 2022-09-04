@@ -10,6 +10,16 @@ import multilat
 import math
 from vincenty import vincenty
 from scipy.optimize import curve_fit
+import pickle
+
+import tensorflow as tf
+from tensorflow.keras.layers import *
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.optimizers import Adam, RMSprop, SGD
+from keras.utils import plot_model
+from tensorflow import keras
+from sklearn.model_selection import train_test_split
+
 
 def loadNodes(rewriteUTM=False):
     """ Loads in the nodes from the CSV and returns it as a dictionary where the key is its NodeId"""
@@ -96,8 +106,8 @@ def loadModelData(month="June", modelType="initial", threshold=-102, verbose=Tru
         if verbose:
             print("{}/{}".format(counter, numberOfVals))
         x = [0 for i in range(xInputNum+2)]
-        x[0] = res[entry]["gt"][0]
-        x[1] = res[entry]["gt"][1]
+        x[0] = res[entry]["res"][0]
+        x[1] = res[entry]["res"][1]
         tmp_y = res[entry]["gt"]-res[entry]["res"]
 
         tmp_y[0] = round(tmp_y[0],1)
@@ -414,6 +424,555 @@ def rewriteMarchData(month="March"):
     finalData['y']=Y
     with open("../Data/"+month+"/associatedMarchData_2.json","w+") as f:
         json.dump(finalData, f)
+def LoadSeqData(month="June"):
+    '''
+        Idea is that if we give the machine the distances it is away from other nodes and the signal strenght, we would be able to predict the distance it is away from
+        the actual node.
+        So, basically trying to reproduce the 'proximity' filter, with a neural network -> thus we would get an even better distance result, that would count the
+        noise / vegetation in as well. Since, the distance ~ signalStr equation in itself is not enough to make the prediction to the actual distance.
+    '''
+    if(month =="June"):
+        # Load in the June JSON
+        pathName = "../Data/"+month+"/newData.json"
+        with open(pathName,"r") as f:
+            data = json.load(f)
+        nodes = loadNodes(rewriteUTM=True)
+
+    X = data["X"]
+    y = data["y"]
+    newX = []
+    newY = []
+    #Going to gather the new data pairs in the form of:
+    #Elements of newX will look like: [
+    #                                   [signalStrength of the current node in the batch],
+    #                                   [all relative node distances in the same batch, that also have relevant signal],
+    #                                   [all relative node signals in the same batch, that are relevant]
+    #                                   [batch_number]]
+    #Elements of newY will look like: [distance between current node and the drone]
+    n = 0
+    for index, item in enumerate(data["X"]):
+
+        #Keys
+        keys = item["data"].keys()
+        #Get the drone position in lat,long
+        dronePos = [data["y"][index][0],data["y"][index][1]]
+        #Convert those positions to utm coordinates
+        utmDronePos = utm.from_latlon(dronePos[0],dronePos[1])
+        utmDronePosArr = np.array([np.float64(utmDronePos[0]),np.float64(utmDronePos[1])])
+
+        #getNodedistances returns two lists. One of them contains [[relative node distances in the same batch],[position of current node], [signal of current node]]
+        #The skipKeys will have all the NodeIDs of the nodes that need to be skipped because they are
+        #outside of the range for the signals
+        replace, skipKeys = getNodedistances(item["data"])
+
+        #Gets all the signals in the batch
+        signals = getSignals(item["data"])
+
+        for key in keys:
+            #If the key has wrong outside of range signal, we skip it
+            if key in skipKeys:continue
+
+            #If the drone position is not recorded well, we skip it
+            if(dronePos == (0,0) or dronePos == (0.754225181062586, -12.295563892977972) or dronePos == (4.22356791831445, -68.85519277364834)): continue
+
+            #We gather all the signals that are in the batch for the current node
+            #and skip the outside of the range signals
+            sSignals = []
+            for newKey in keys:
+                if newKey == key: continue
+                if newKey in skipKeys:continue
+                sSignals.append(signals[newKey])
+            #Need at least 3 nodes, so we take out everything else - lost about 48 data points from the 4600.
+            if len(sSignals) < 2: continue
+            #current node position in latlon, then convert it into utm, then get the distance between them
+            sNodePos = item["data"][key][1]
+            utmsNodePos = utm.from_latlon(sNodePos[0],sNodePos[1])
+            utmsNodePosArr = np.array([np.float64(utmsNodePos[0]),np.float64(utmsNodePos[1])])
+            actualDist = np.linalg.norm(utmsNodePosArr-utmDronePosArr)
+
+            #Eventually add these data pairs into the newX and newY, which will be saved for later training and modelling.
+            newX.append([item['data'][key][2],item['data'][key][0], sSignals, index])
+            newY.append(actualDist)
+    assert(len(newX) == len(newY))
+    finalData = {}
+    finalData['X']=newX
+    finalData['y']=newY
+
+    #Save the file in a json, that will be used for modelling / training
+    with open("../Data/"+month+"/distanceNNData.json","w+") as f:
+            json.dump(finalData, f)
+
+def FunctionalModel():
+    X, y = loadANNData_3()
+    #print(y)
+    y = np.array(y, dtype="float64")
+    print(y)
+    i1 = np.array(X,dtype="float64")
+    print(i1[0])
+    input()
+    #i2 = np.array(X[1], dtype="float64")
+    #print(i2[0])
+    #input()
+    #i3 = np.array(X[2], dtype=object)
+    #print(i3[0])
+    #input()
+
+    print(i1[0].shape)
+    print(i1.shape)
+    input()
+    print(i1)
+    print("\n")
+    input()
+    '''
+    for i in range(0,600):
+        print(i1[i].shape,i2[i].shape,i3[i].shape)
+    input()
+    '''
+    #print(X[0])
+    #input()
+    #input1 = Input(shape=(16,))
+    '''
+    input2 = Input(shape=(17,))
+    #input0 = Concatenate()([input1, input2])
+    x = Dense(2)(input2)
+    hidden1 = Dense(10,activation='relu')(x)
+    hidden2 = Dense(8,activation='relu')(hidden1)
+    hidden3 = Dense(6, activation='relu')(hidden2)
+    output = Dense(1,activation='relu')(hidden3)
+    model = Model(inputs=input2, outputs=output)
+    model.summary()
+    model.compile(
+        loss="mean_squared_error",
+        optimizer="adam",
+        metrics=["mean_absolute_error"]
+    )
+    '''
+    model = Sequential()
+    model.add(Dense(1, input_dim=1, activation="relu"))
+    model.add(Dense(1, activation="linear"))
+    opt = SGD(learning_rate=0.01,momentum=0.9)
+    model.compile(
+        loss="mean_squared_logarithmic_error",
+        optimizer=opt,
+        metrics=["mse"]
+
+    )
+    x_train, x_test, y_train, y_test = train_test_split(i1, y, train_size=0.8, random_state=101)
+    print(x_train)
+    print(y_train)
+    input()
+    #print(x1_train[0],x2_train[0], y_train[0])
+    #input()
+    history = model.fit(x_train, y_train, batch_size=64, epochs=100, validation_split=0.2)
+    test_scores = model.evaluate(x_test, y_test, verbose=2)
+    print("Test loss:", test_scores[0])
+    print("Test accuracy:", test_scores[1])
+    print(test_scores)
+    predicted = model.predict(x_test)
+
+    print(predicted)
+    print(y_test)
+    for i in range(0,len(y_test)):
+        print(predicted[i], "and",y_test[i], "and", x_test[i])
+        input()
+'''
+    This function is similar to the check_dissonance function, but is different from it to an extent.
+    check_dissonance can be deleted, once this one is working properly.
+'''
+def error_calculation(arr):
+    print(arr)
+    currSig = arr[0]
+    currDistS = arr[1]
+    currOtherSig = arr[2]
+    currOtherDistS = arr[3]
+    size = (len(currOtherSig))
+    numerator = 0
+    endPercent = 36
+    errorDistances = []
+    for i in range(0,len(currOtherSig)):
+        compare = currOtherDistS[i]
+        val0 = currDistS * 1.0
+        val1 = currDistS
+        val2 = currDistS
+        percent = 0
+        percent2 = 0
+        for j in range(0,endPercent):
+            if(val0 *(1+(j/100)) < compare):
+                val1 = val0 *(1+((j+1)/100))
+                percent = j+1
+            if(val0 *(1-(j/100)) > compare):
+                val2 = val0 *(1-((j+1)/100))
+                percent2 = j+1
+        if(currOtherSig[i] > currSig):
+
+            print(currOtherSig[i], "is bigger than ", currSig)
+
+            print(currOtherSig[i], currSig)
+            print(val0, compare)
+            print(val1, compare, percent)
+            print(val2, compare, percent2)
+
+
+            if(val0 < compare):
+                addNum = (0.5*(percent)/endPercent)
+                numerator += addNum
+                print("Possible dissonance")
+                print(val0, " is less than ", compare, "so we add", numerator)
+                #numerator += (1*(endPercent-percent)/endPercent)
+            else:
+                addNum = (0.5*(endPercent-percent2)/endPercent)
+                numerator += addNum
+                print("Good for first")
+                print(val0, " is bigger than ", compare, "so we add", numerator)
+            #input()
+
+        if(currOtherSig[i] < currSig):
+
+            print(currOtherSig[i], "is less than ", currSig)
+            print(currOtherSig[i], currSig)
+            print(val0, compare)
+            print(val1, compare, percent)
+            print(val2, compare, percent2)
+
+
+            if(val0 > compare):
+                addNum = (0.5*(percent2)/endPercent)
+                numerator += addNum
+                print("Possible dissonance")
+                print(val0, " is bigger than ", compare, "so we add", numerator)
+                #numerator += (1*(endPercent-percent2)/endPercent)
+            else:
+                addNum = (0.5 *(endPercent-percent)/endPercent)
+                numerator += addNum
+
+                print("Good for first")
+                print(val0, " is less than ", compare, "so we add", numerator)
+            #print(numerator)
+            #input()
+        if(currOtherSig[i] == currSig):
+            if(val0 > compare):
+                addNum = (0.5*(endPercent-percent2)/endPercent)
+                numerator += addNum
+            else:
+                addNum = (0.5 *(endPercent-percent)/endPercent)
+                numerator += addNum
+        if(addNum != 0):
+            dist1 = calculateDist_2(currSig)
+            dist2 = calculateDist_2(currOtherSig[i])
+            err = abs(dist1-dist2)
+            if(currOtherSig[i] < currSig):
+                err = err*(percent2/endPercent)
+            elif(currOtherSig[i] > currSig):
+                err = -err*(percent/endPercent)
+            else:
+                if(percent2 > percent):
+                    err = err*(percent2/endPercent)
+                else:
+                    err = -err*(percent/endPercent)
+            errorDistances.append([addNum, err, currOtherSig[i]])
+    '''
+        The error distances need to compare each signal error % in a bacth, to successfully indentify
+        the signal(s) that are wrong. After identifying those signals, we can make a proper guess at the
+        error distances. Otherwise, it is going to just mess it up.
+    '''
+
+
+    #print(numerator)
+    #print(size)
+    print(errorDistances)
+    print(round(numerator/size*100,2), "%")
+    input()
+
+
+
+
+
+
+
+
+
+def loadANNData_3():
+    '''
+        Idea here would be gather the signal and then the calculated distance, then get what the error is
+        then train the signal and the error on the model. Model would try to predict the error that is
+        contributed to the signal~distance.
+    '''
+    month = "June"
+    pathName = "../Data/"+month+"/distanceNNData.json"
+    with open(pathName,"r") as f:
+        data = json.load(f)
+    iput1 = []
+    iput2 = []
+    iput3 = []
+    output = []
+    batchN = 0
+    a = 0
+    distanceSum = []
+    actualDist = []
+    allSignals = []
+    importantDs = []
+    goodCount = 0
+    badCount = 0
+    goodCount2 = 0
+    badCount2 = 0
+    for index, i in enumerate(data["X"]):
+        actual = data['y'][index]
+        predicted = calculateDist_2(i[0])
+        err = actual - predicted
+        err = np.float64(err)
+        #print(i[0], i[1],relSignals, i[2], actual, predicted, err, i[3])
+        #print(err)
+        importantD = [i[0], i[1], i[2], actual, predicted, err, i[3]]
+        importantD[1] = sum(importantD[1])/len(importantD[1])
+        if(i[3] == batchN):
+            total = 0
+            for number in i[1]:
+                total += number
+            distanceSum.append([total/len(i[1]), a])
+            actualDist.append(actual)
+            allSignals.append(i[0])
+            importantDs.append(importantD)
+            a += 1
+
+
+        else:
+            for e in range(0,len(importantDs)):
+                addTotals = []
+                for j in range(0,len(distanceSum)):
+                    if(e == distanceSum[j][1]): continue
+                    addTotals.append(distanceSum[j][0])
+                importantDs[e].insert(3, addTotals)
+            #print(distanceSum, actualDist, allSignals)
+            # This is where we calculate the value between that will be between -1 to 1, that will tell us
+            # how big the error could be
+            # The next value then will tell us how likely the error is
+            # Those two values are going to be used by the machine along with the signal, to predict the error
+            # Then the error is going to be added to the calcualted distance, giving a better result for the RSSI ~ Distance
+
+            for important in importantDs:
+                error_calculation(important)
+
+            #Decide if the idea is good or not here, batch data gathered
+            maxi2 = 0
+            mini2 = 10000000
+            for d in range(0, len(actualDist)):
+                if(maxi2 < actualDist[d]):
+                    maxi2 = actualDist[d]
+                    maxi2Index = d
+                if(mini2 > actualDist[d]):
+                    mini2 = actualDist[d]
+                    mini2Index = d
+            #Playing around with the maximum a bit
+            maxi = distanceSum[maxi2Index][0] * 1.35
+            maxiIndex = maxi2Index
+            mini = distanceSum[mini2Index][0] * 0.65
+            miniIndex = mini2Index
+
+            for n in range(0,len(distanceSum)):
+                if(maxi < distanceSum[n][0]):
+                    maxi = distanceSum[n][0]
+                    maxiIndex = n
+                if(mini > distanceSum[n][0]):
+                    mini = distanceSum[n][0]
+                    miniIndex = n
+            if(maxi2Index == maxiIndex):
+                #print("OMG TRUE!")
+                goodCount += 1
+
+            else:
+                #print("You son of a bitch that is not true")
+                badCount += 1
+            if(mini2Index == miniIndex):
+                goodCount2 +=1
+            else:
+                badCount2 += 1
+            #Reset the batch data, start with new batch
+            a = 0
+            batchN += 1
+            distanceSum = []
+            actualDist = []
+            allSignals = []
+            importantDs = []
+            total = 0
+            for number in i[1]:
+                total += number
+            distanceSum.append([total/len(i[1]),a])
+            actualDist.append(actual)
+            allSignals.append(i[0])
+            importantDs.append(importantD)
+            a += 1
+
+        #input()
+        iput1.append(np.array(i[0]))
+        output.append(np.array(err))
+    print(goodCount, badCount)
+    print(goodCount2, badCount2)
+    input()
+    return iput1, output
+
+
+def loadANNData_2():
+    '''
+        Contains the data in format that the machine's gonna learn on.
+    '''
+    month = "June"
+    pathName = "../Data/"+month+"/distanceNNData.json"
+    with open(pathName,"r") as f:
+        data = json.load(f)
+    iput1 = []
+    iput2 = []
+    iput3 = []
+    output = []
+    maxi = 0
+    for index, i in enumerate(data["X"]):
+        #temp0 = []
+        temp0_ind = 0
+        temp1_ind = 0
+        '''
+        while len(temp0) != 15:
+            if(temp0_ind == 0):
+                temp0.append(i[0])
+                temp0_ind += 1
+            else:
+                temp0.append(np.float64(0))
+        '''
+        if(i[0] < -102): continue
+        #print(i[0], "and the actual distance away is: ", data['y'][index])
+        #print("\n")
+        #print(i[1])
+        #print("\n")
+        #print(i[2])
+        #input()
+        while len(i[1]) != 16:
+            i[1].append(np.float64(0))
+        while len(i[2]) != 17:
+            if(temp1_ind == 0):
+                i[2].insert(0,i[0])
+                temp1_ind +=1
+            else:
+                i[2].append(np.float64(0))
+        i[1].insert(0,np.float64(i[0]))
+        iput1.append(np.array(i[0]))
+        iput2.append(np.array(i[1]))
+        iput3.append(np.array(i[2]))
+        output.append(np.array(data['y'][index]))
+    return iput1, output
+def deviation(signals, signal):
+    total = 0
+    for i in range(0,len(signals)):
+        total = total + pow((signals[i]-signal),2)
+    return math.sqrt(total/len(signals))
+
+def getSignals(arr):
+    keys = arr.keys()
+    returned = {}
+    for key in keys:
+        returned[key] = arr[key][2]
+    return returned
+
+
+def getNodedistances(arr):
+    nodes = loadNodes(rewriteUTM=True)
+    keys = arr.keys()
+    skipKeys = []
+    #Adds the NodeIDs that has signals out of the equation range -103<RSSI<-72
+    for keyS in keys:
+        currentNode = arr[keyS]
+        if(arr[keyS][2][0] < -101):
+            skipKeys.append(keyS)
+        if(arr[keyS][2][0] > -73):
+            skipKeys.append(keyS)
+    #This loop gathers the data so that the loadANNData functions can use it
+    #Returns a list, in the form [[Nodes distances away from the current node],[position of the current node],[signal corresponding to the node]]
+    #Also returns the list that contains the taken out NodeIDs
+    for key in keys:
+        if(key in skipKeys):continue
+        currentNode = arr[key]
+        nodeDistances=[]
+        currentNodePos = [nodes[key]['Latitude'],nodes[key]['Longitude']]
+        utmCurrentNodePos = utm.from_latlon(currentNodePos[0], currentNodePos[1])
+        utmCurrentNodePosArr = np.array([np.float64(utmCurrentNodePos[0]),np.float64(utmCurrentNodePos[1])])
+        for node in nodes:
+            if(node == key): continue
+            if(node not in keys): continue
+            if(node in skipKeys): continue
+            nodePos = [nodes[node]['Latitude'],nodes[node]['Longitude']]
+            utmNodePos = utm.from_latlon(nodePos[0], nodePos[1])
+            utmNodePosArr = np.array([np.float64(utmNodePos[0]),np.float64(utmNodePos[1])])
+            aDist = np.linalg.norm(utmNodePosArr-utmCurrentNodePosArr)
+            nodeDistances.append(aDist)
+        arr[key][0] = nodeDistances
+        arr[key][2] = arr[key][2][0]
+    return arr, skipKeys
+
+
+def LoadMLPData(month="June"):
+    #This data will be loading RSS values and coordinates, so that the machine can 'learn' on it
+    pathName = "../Data/"+month+"/newData.json"
+    with open(pathName,"r") as f:
+        data = json.load(f)
+    batchSignals = []
+    targetPos = []
+
+    for index, item in enumerate(data["X"]):
+
+        #Keys please
+        keys = item["data"].keys()
+        signals= []
+        newSignals = []
+        #Loop through each item in X data set
+        for key in keys:
+            dronePos = (data["y"][index][0],data["y"][index][1])
+            #print(item["data"][key][2])
+            #input()
+            if(dronePos == (0,0) or dronePos == (0.754225181062586, -12.295563892977972) or dronePos == (4.22356791831445, -68.85519277364834)): continue
+            signal = item["data"][key][2][0]
+            signals.append(signal)
+            convertedPos = utm.from_latlon(data["y"][index][0],data["y"][index][1])
+            dronePos = [np.float64(convertedPos[0]),np.float64(convertedPos[1])]
+        if len(signals) > 3:
+            for i in range(0,3):
+                maxi = max(signals)
+                newSignals.append(np.float64(maxi))
+                signals.remove(maxi)
+
+            #newSignals = np.array(newSignals)
+            #dronePos = np.array(dronePos)
+            batchSignals.append(newSignals)
+            targetPos.append(dronePos)
+    assert(len(targetPos) == len(batchSignals))
+    #finalData = {}
+    #finalData['X']=batchSignals
+    #finalData['Y']=targetPos
+    #with open("../Data/June/MLPData.json","w+") as f:
+    #    json.dump(finalData, f)
+    #batchSignals = np.array(batchSignals)
+    #targetPos = np.array(targetPos)
+    return batchSignals, targetPos
+
+
+def loadANNData(month="June"):
+    pathName = "../Data/"+month+"/newEquationData.json"
+    with open(pathName,"r") as f:
+        data = json.load(f)
+    values=[]
+    distances=[]
+    count = 0
+    for i in range(0,len(data["Y"])):
+        if(data["Y"][i] < -102):
+            count += 1
+            continue
+        values.append(np.float64([data["Y"][i]]))
+        distances.append(np.float64(data["X"][i]))
+
+    print("This much was taken out:", count)
+    X = np.array(values)
+    Y = np.array(distances)
+    #Y = Y.astype(int)
+    return X, Y
+
+
+
 
 
 def newEquationData(month="June"):
@@ -532,7 +1091,7 @@ def rewrite(values, valuesUpdated):
         if(abs(values[index][1]-values[return_index][1]) > 3):
             #print("Dissonance for sure!")
             closestDist = abs(values[index][0] - values[return_index][0])
-            print("ClosestDistance:", closestDist)
+            #print("ClosestDistance:", closestDist)
             negative = bool((values[index][0] - values[return_index][0]) < 0)
             if(closestDist < 50):
                 values[index][1] = values[return_index][1]
@@ -630,6 +1189,13 @@ def closest_to(values, index):
 '''
     End of the Part for the new type of approach.
 '''
+def calculateDist_3(RSSI):
+    model = pickle.load(open('anndistance.sav','rb'))
+    y = model.predict([[np.float64(RSSI)]])
+    return y[0]
+def calculateRSSI(distance):
+    rssi = (np.exp((distance*-0.00568791789392432))*29.797940785785794)-102.48720932300988
+    return rssi
 
 def calculateDist_2(RSSI):
     # formula from our data
@@ -656,4 +1222,9 @@ if __name__=="__main__":
     #loadModelData()
     #rewriteMarchData()
     #print(multilat.predictions(rssiThreshold=-102,keepNodeIds=True, isTriLat = False, month="June"))
-    associateJuneData(newData=True)
+    #associateJuneData(newData=True)
+    #LoadMLPData()
+    #loadANNData()
+    #LoadSeqData()
+    #loadANNData_2()
+    FunctionalModel()

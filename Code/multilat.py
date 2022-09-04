@@ -212,7 +212,8 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
             # If we're doing trilateration rather than multi, keep only the 3 lowest values
             if isTriLat and len(distToNodes)==3 and X[idx]["data"][nodeId]>currentMax:
                 continue
-            distToNodes.append(utils.calculateDist_2(X[idx]["data"][nodeId]))
+
+            distToNodes.append(utils.calculateDist_3(X[idx]["data"][nodeId]))
             if dataEntry=="3288000000": nodeId="3288e6"
             nodeLocs.append([nodes[nodeId]["NodeUTMx"],nodes[nodeId]["NodeUTMy"]])
 
@@ -277,15 +278,15 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
         '''
             TESTING AREA START
         '''
-        print("Next")
+        #print("Next")
         #print("Node loc: ", nodeLocs)
-        print("Calculated Dist: ",distToNodes)
+        #print("Calculated Dist: ",distToNodes)
         #print("Signals: ",signals)
-        print("Actual Dist: ",actualDist)
+        #print("Actual Dist: ",actualDist)
         #print("NodeIDs: ",theids)
         #print("Actual position: ", gt)
         #print("Predicted position: ", res)
-        print("Error: ", dist)
+        #print("Error: ", dist)
         #print("\n")
 
 
@@ -321,19 +322,19 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
             #print("\n")
             #print("There was a change!")
             #print("\n")
-            print("Calculated Dist: ",distToNodes)
+            #print("Calculated Dist: ",distToNodes)
             #print("Node loc: ", nodeLocs)
             res = np.array(gps_solve(distToNodes, list(np.array(nodeLocs))))
             dist = np.linalg.norm(res-gt)
             #print("Node loc: ", nodeLocs)
 
             #print("Signals: ",signals)
-            print("Actual Dist: ",actualDist)
+            #print("Actual Dist: ",actualDist)
             #print("NodeIDs: ",theids)
              #print("Actual position: ", gt)
             #print("Predicted position: ", res)
-            print("Error: ", dist)
-        input()
+            #print("Error: ", dist)
+        #input()
 
         '''
             TESTING AREA END

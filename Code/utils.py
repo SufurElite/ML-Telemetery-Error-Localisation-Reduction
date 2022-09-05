@@ -261,7 +261,7 @@ def loadCovariateData():
     
     return X, y
 
-def loadRSSModelData(month="June",includeCovariatePred = False, isAllDists=False, isRSS = False):
+def loadRSSModelData(month="June",includeCovariatePred = False, rowToAdjacencyMatrix = None):
     """ This is similar to loading model data, but the y values, instead of being offsets to correct
         the error derived from multilat, are the distances to each node"""
     
@@ -319,6 +319,8 @@ def loadRSSModelData(month="June",includeCovariatePred = False, isAllDists=False
             habitatPred = covariateModel.predict(np.array([signal_X]))[0]
             
             tmp_x[0] = habitatPred
+        if rowToAdjacencyMatrix!=None and not includeCovariatePred:
+            tmp_x =rowToAdjacencyMatrix(tmp_x)
         X.append(tmp_x)
         y.append(tmp_y)
     X = np.array(X)

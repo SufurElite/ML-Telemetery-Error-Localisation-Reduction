@@ -261,7 +261,7 @@ def loadCovariateData():
     
     return X, y
 
-def loadRSSModelData(month="June",includeCovariatePred = False, rowToAdjacencyMatrix = None):
+def loadRSSModelData(month="June",includeCovariatePred = False, rowToAdjacencyMatrix = None, includeInitialGuess: bool = False):
     """ This is similar to loading model data, but the y values, instead of being offsets to correct
         the error derived from multilat, are the distances to each node"""
     
@@ -278,6 +278,12 @@ def loadRSSModelData(month="June",includeCovariatePred = False, rowToAdjacencyMa
     # load in the nodes
     nodes = loadNodes(rewriteUTM=True)
     nodeKeys = list(nodes.keys())
+
+    # Generate the node locations in a list
+    nodeLocs = []
+    for key in nodeKeys:
+        nodeLocs.append([nodes[key]["NodeUTMx"],nodes[key]["NodeUTMy"]])
+
     xInputNum = len(nodeKeys)
     # starting idx is either 0 or 1 if we include the habitat,
     # but this has the opportunity to be increased later if we want to have multiple
@@ -297,7 +303,9 @@ def loadRSSModelData(month="June",includeCovariatePred = False, rowToAdjacencyMa
         tmp_y = [0 for i in range(len(nodeKeys))]
         # ground truth location 
         tagGt = utm.from_latlon(y_vals[i][0], y_vals[i][1])        
-
+        if includeInitialGuess:
+            tmpNodeLocs = []
+            other_x = []
         for nodeNum in range(len(nodeKeys)):
             nodeKey = nodeKeys[nodeNum]
             nodeLoc = np.array([np.float64(nodes[nodeKey]["NodeUTMx"]), np.float64(nodes[nodeKey]["NodeUTMy"])])
@@ -306,11 +314,14 @@ def loadRSSModelData(month="June",includeCovariatePred = False, rowToAdjacencyMa
             if nodeKey not in X_vals[i]["data"] or X_vals[i]["data"][nodeKey]<-102: 
                 # and then calculate this node's relative distance to the tag
                 continue
-            else:
-                # otherwise set the relative x value equivalent to the distance
-                tmp_x[startIdx+nodeNum] = calculateDist_2(X_vals[i]["data"][nodeKey])
-                signal_X[nodeNum] = X_vals[i]["data"][nodeKey]
-                
+            # otherwise set the relative x value equivalent to the distance
+            tmp_x[startIdx+nodeNum] = calculateDist_2(X_vals[i]["data"][nodeKey])
+            if includeInitialGuess:
+                other_x.append(tmp_x[startIdx+nodeNum])
+                tmpNodeLocs.append([nodes[nodeKey]["NodeUTMx"],nodes[nodeKey]["NodeUTMy"]])
+            signal_X[nodeNum] = X_vals[i]["data"][nodeKey]
+        #print(other_x)
+        #print(tmpNodeLocs)
         if includeCovariatePred:
             # will start with just ordinal but may switch to different encoding,
             # model dependent
@@ -319,6 +330,18 @@ def loadRSSModelData(month="June",includeCovariatePred = False, rowToAdjacencyMa
             habitatPred = covariateModel.predict(np.array([signal_X]))[0]
             
             tmp_x[0] = habitatPred
+        
+        if includeInitialGuess:
+            predictedLoc = multilat.gps_solve(other_x, list(np.array(tmpNodeLocs)))
+            #print(predictedLoc)
+            for i in range(len(nodeKeys)):
+                if tmp_x[startIdx+i]!=0: continue
+                nodeKey = nodeKeys[nodeNum]
+                nodeLoc = np.array([np.float64(nodes[nodeKey]["NodeUTMx"]), np.float64(nodes[nodeKey]["NodeUTMy"])])
+                tmp_x[i] = np.linalg.norm(predictedLoc-nodeLoc)
+            #print(tmp_x)
+            updatedLoc = multilat.gps_solve(tmp_x, list(np.array(nodeLocs)))
+        #input(np.linalg.norm(predictedLoc-updatedLoc))
         if rowToAdjacencyMatrix!=None and not includeCovariatePred:
             tmp_x =rowToAdjacencyMatrix(tmp_x)
         X.append(tmp_x)
@@ -803,4 +826,4 @@ def calculateDist(RSSI):
 
 
 if __name__=="__main__":
-    loadCovariateData()
+    loadRSSModelData(includeOtherValues=True)

@@ -23,6 +23,7 @@ from matplotlib import pyplot as plt
 from graphData import dataLoader 
 from sklearn.neural_network import MLPRegressor
 import utils
+from statsmodels.tools.eval_measures import rmse
 
 def get_model(n_inputs, n_outputs):
 	model = Sequential()
@@ -33,50 +34,32 @@ def get_model(n_inputs, n_outputs):
 
 def simpleKeras(useCovariate: bool =False):
     X, y = loadRSSModelData(month="June",includeCovariatePred=useCovariate)
-    
+
     n_inputs = X.shape[1]
     n_outputs = y.shape[1]
 
-    results = []
-    cv = RepeatedKFold(n_splits=10, n_repeats=3, random_state=1)
-	# enumerate folds
-    for train_ix, test_ix in cv.split(X):
-        # prepare data
-        X_train, X_test = X[train_ix], X[test_ix]
-        y_train, y_test = y[train_ix], y[test_ix]
-        # define model
-        model = get_model(n_inputs, n_outputs)
-        # fit model
-        model.fit(X_train, y_train, verbose=1, epochs=100)
-        # evaluate model on test set
-        vals = model.evaluate(X_test, y_test, verbose=0)
-        # store result
-        print(vals)
-        results.append(vals)
-    print(results)
+    model = get_model(n_inputs, n_outputs)    
 
-def tmp():
-    dl = dataLoader(isFlatten=True)
-    X, y = dl.getTotalData()
     X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, random_state=101)
-    regr = MLPRegressor(random_state=101, early_stopping=False, max_iter=1000, verbose=True).fit(X_train, y_train)
-    y_pred = regr.predict(X_test)
+
+    model.fit(X_train, y_train, verbose=1, epochs=100)
+    # evaluate model on test set
+    vals = model.evaluate(X_test, y_test, verbose=0)
+        
+    print(vals)
+
+def concatDataModel():
+    dl = dataLoader(covariate=True,loadConcatData=True)
+    X,y = dl.getTotalData()
+    # Split the data into train, test, and validation sets
+    X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
+    X_valid, X_test, y_valid, y_test = train_test_split(X_remaining,y_remaining, test_size=0.5)
+    # Train a regressor on it
+    reg = xgb.XGBRegressor(tree_method="hist", n_estimators=64)
+    reg.fit(X_train, y_train, eval_set=[(X_valid, y_valid)])
     
-    nodes = utils.loadNodes(rewriteUTM=True)
-    # determine the different node locations in the order derived from list(nodes.keys()) - order matters
-    nodeLocs = []
-    for node in list(nodes.keys()):
-        nodeLocs.append([nodes[node]["NodeUTMx"],nodes[node]["NodeUTMy"]])
-        print(node)
-    allErrors = []
-    for i in range(len(y_pred)):
-        gt = gps_solve(y_test[i],np.array(list(nodeLocs)))
-        predicted = gps_solve(y_pred[i],np.array(list(nodeLocs)))
-        dist = np.linalg.norm(predicted-gt)
-        allErrors.append(dist)
-    
-    # And print the average test error
-    print("The test average error is {}m with a maximum of {}".format(sum(allErrors)/len(allErrors), max(allErrors)))
+    y_pred = reg.predict(X_test)
+    print(rmse(y_test, y_pred))
 
 def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData: bool =True, useErrorBars: bool = False, useColorScale: bool = True, plotError: bool = True, isAllDists: bool =False,isRSS: bool = False, useThresholdError: bool = False, sameNodeColor: bool = False):
     """ Root mean squared error XGBoost trained on the june data 
@@ -90,13 +73,19 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     if isErrorData:
         X, y = loadModelData(month="June",threshold=-96, verbose=False, includeCovariatePred=useCovariate)
     else:
-        X, y = loadRSSModelData(month="June",includeCovariatePred=useCovariate)
-        #dl = dataLoader()
-        #X, y = dl.getTotalData()
+        #X, y = loadRSSModelData(month="June",includeCovariatePred=useCovariate)
+        dl = dataLoader(isFlatten=True)
+        X, y = dl.getTotalData()
     startIdx = 0
     if useCovariate:
         startIdx = 1
     
+    # determine the different node locations in the order derived from list(nodes.keys()) - order matters
+    nodes = utils.loadNodes(rewriteUTM=True)
+    nodeLocs = []
+    for node in list(nodes.keys()):
+        nodeLocs.append([nodes[node]["NodeUTMx"],nodes[node]["NodeUTMy"]])
+
     # Split the data into train, test, and validation sets
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
     X_valid, X_test, y_valid, y_test = train_test_split(X_remaining,y_remaining, test_size=0.5)
@@ -104,15 +93,27 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     # Train a regressor on it
     reg = xgb.XGBRegressor(tree_method="hist", n_estimators=32)
     reg.fit(X_train, y_train, eval_set=[(X_valid, y_valid)])
-
+    
     # predict the whole dataset
     yPred = reg.predict(X)
     # find the average error for the whole dataset
     avgError = [0,0]
 
     for idx in range(len(yPred)):
-        gt = np.array([np.float64(X[idx][0]+y[idx][0]), np.float64(X[idx][1]+y[idx][1])])
-        predicted = np.array([np.float64(yPred[idx][0]+X[idx][0]),np.float64(yPred[idx][1]+X[idx][1])])
+        if isErrorData:
+            gt = np.array([np.float64(X[idx][0]+y[idx][0]), np.float64(X[idx][1]+y[idx][1])])
+            predicted = np.array([np.float64(yPred[idx][0]+X[idx][0]),np.float64(yPred[idx][1]+X[idx][1])])
+        else:
+            tmp_y = []
+            actual_y = []
+            tmp_locs = []
+            for i in range(len(y[idx])):
+                if y[idx][i]==0: continue
+                actual_y.append(y[idx][i])
+                tmp_y.append(yPred[idx][i])
+                tmp_locs.append(nodeLocs[i])
+            gt = gps_solve(actual_y,np.array(list(tmp_locs)))
+            predicted = gps_solve(tmp_y,np.array(list(tmp_locs)))
         dist = np.linalg.norm(predicted-gt)
         avgError[0]+=dist
         avgError[1]+=1
@@ -120,11 +121,11 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     # print the result
     print(len(X_valid),len(X_test),len(X_train),len(X))
     print("The total average error is {}m".format(avgError[0]/avgError[1]))
-
+    #input()
     # Now we evaluate on the test set
     # predict on unseen test set
     yTestPred = reg.predict(X_test)
-    
+    print("RMSE on test prediction {}".format(rmse(y_test, yTestPred)))
     # we want to find all the error values as well
     # as their respective locations and habitats
     allErrors = []
@@ -134,10 +135,6 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     grid, sections, nodes = loadSections()
     # load in the habitat
     habitatMap = HabitatMap()
-    # determine the different node locations in the order derived from list(nodes.keys()) - order matters
-    nodeLocs = []
-    for node in list(nodes.keys()):
-        nodeLocs.append([nodes[node]["NodeUTMx"],nodes[node]["NodeUTMy"]])
     
     # errorLocs will contain all the locations of the errors to plot
     errorLocs = []
@@ -158,13 +155,24 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     for idx in range(len(yTestPred)):
         gt = None
         predicted = None
+        
         # determine the ground truth and predicted values according to the data provided to the model
         if isErrorData:
             gt = np.array([np.float64(X_test[idx][0]+y_test[idx][0]), np.float64(X_test[idx][1]+y_test[idx][1])])
             predicted = np.array([np.float64(yTestPred[idx][0]+X_test[idx][0]),np.float64(yTestPred[idx][1]+X_test[idx][1])])
         else:
-            gt = gps_solve(y_test[idx],np.array(list(nodeLocs)))
-            predicted = gps_solve(yTestPred[idx],np.array(list(nodeLocs)))
+            tmp_y = []
+            actual_y = []
+            tmp_locs = []
+            for i in range(len(y_test[idx])):
+                if y_test[idx][i]==0: continue
+                actual_y.append(y_test[idx][i])
+                tmp_y.append(yTestPred[idx][i])
+                tmp_locs.append(nodeLocs[i])
+            gt = gps_solve(actual_y,np.array(list(tmp_locs)))
+            predicted = gps_solve(tmp_y,np.array(list(tmp_locs)))
+            #gt = gps_solve(y_test[idx],np.array(list(nodeLocs)))
+            #predicted = gps_solve(yTestPred[idx],np.array(list(tmp_locs)))
         dist = np.linalg.norm(predicted-gt)
         errorDirections.append([predicted[0]-gt[0],predicted[1]-gt[1]])
         allErrors.append(dist)
@@ -193,7 +201,8 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
         print("The test errors had the following section distribution: ")
     
     for secKey in freqErrorSections.keys():
-        print("{} : {}".format(secKey,freqErrorSections[secKey]))
+        if len(freqErrorSections[secKey])!=0:
+            print("{} : {} | {}".format(secKey,sum(freqErrorSections[secKey])/len(freqErrorSections[secKey]),freqErrorSections[secKey]))
     # Display the habitat frequency errors
     if useThresholdError:
         print("The test errors over {} m had the following habitat distribution: ".format(sectionThreshold))
@@ -254,6 +263,4 @@ def getClassificationMetrics(y_test, y_pred):
     print(classification_report(y_test, y_pred))
 
 if __name__ == "__main__":
-    #simpleKeras(useCovariate=False)
-    #rmseModel(useCovariate=True,isErrorData=False,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
-    tmp()
+    concatDataModel()

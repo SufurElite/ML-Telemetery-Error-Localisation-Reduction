@@ -4,6 +4,7 @@
 import numpy as np
 import pandas as pd
 import math, multilat, utils, json, utm, datetime
+from plot import plotGridWithPoints
 
 def closestNodeCount(month="March"):
     """ This function goes over the data, specified by month, and then compares the
@@ -181,12 +182,12 @@ def dataGridSections(month="June"):
     for sectionKey in sectionFrequency.keys():
         print("\t{}:{}".format(sectionKey, sectionFrequency[sectionKey]))
 
-def findAvgTrueError(verbose = False, approximated=False):
+def findAvgTrueError(verbose = False, approximated=False, fillInRest=False):
     """ Given all the actual distances to the nodes, 
         calculate multilat and determine the error """
     # Loads in data where the X is the calculated dist to each node
     # and y is the actul dist to each node
-    X, y = utils.loadRSSModelData(month = "June", isAllDists=True)
+    X, y = utils.loadRSSModelData(month = "June")
     # Generate the node locations in a list
     nodes = utils.loadNodes(True)
     nodeKeys = list(nodes.keys())
@@ -195,34 +196,39 @@ def findAvgTrueError(verbose = False, approximated=False):
         nodeLocs.append([nodes[key]["NodeUTMx"],nodes[key]["NodeUTMy"]])
     
     errors = [0,0]
+    errorLocs = []
+    allErrors = []
     for i in range(len(X)):
         # get a given row of data
         tmp_distances = []
         tmp_node_distances = []
+        
         for j in range(len(X[i])):
             # if the node had data to a batch, set it to the actual distance
             if approximated and X[i][j]!=0:
                 tmp_distances.append(X[i][j])
                 tmp_node_distances.append(nodeLocs[j])
-            elif approximated:
-                pass
-                #tmp_distances.append(y[i][j])
+            elif approximated and fillInRest:
+                tmp_distances.append(y[i][j])
+                tmp_node_distances.append(nodeLocs[j])
             elif not approximated and X[i][j]!=0:
                 tmp_distances.append(y[i][j])
                 tmp_node_distances.append(nodeLocs[j])
-        """if approximated:
-            tmp_node_distances = nodeLocs"""
+
         # calculate the estimated & actual multilats 
         estimated = np.array(multilat.gps_solve(tmp_distances, list(np.array(tmp_node_distances))))
-        actual = np.array(multilat.gps_solve(y[i], list(np.array(nodeLocs))))
+        actual = np.array(multilat.gps_solve(tmp_distances, list(np.array(tmp_node_distances))))
+        errorLocs.append(actual)
         # find the difference in the predicted location
         dist = np.linalg.norm(estimated-actual)
+        allErrors.append(dist)
         errors[0]+=dist
         errors[1]+=1
         if verbose:
             print("{}, current error : {}, running average error : {}".format(i, dist, errors[0]/errors[1]))
     # show the average error
     print(errors[0]/errors[1])
+    plotGridWithPoints(errorLocs,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = True, errors=allErrors, sameNodeColor=False)
 
 if __name__=="__main__":
-    findAvgTrueError(approximated=True)
+    findAvgTrueError(approximated=False, fillInRest=False)

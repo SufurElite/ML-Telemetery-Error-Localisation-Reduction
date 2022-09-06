@@ -285,6 +285,63 @@ def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
         if nodeDistErrorFreq[node][0]==0: continue
         print("\t{} had an average error of {}m".format(node, (nodeDistErrorFreq[node][0]/nodeDistErrorFreq[node][1])))
     print("Thus the function had a total overall average error of {} m".format((totalDistanceError[0]/totalDistanceError[1])))
+    
+def dataGridSections(month="June"):
+    """ Check the frequency of the data from a given month in particular sectionsof the grid """
+    # load in the varying values
+    grid, sections, nodes = utils.loadSections()
+    # get the lat longs of the month
+    latLongs = utils.loadData(month)["y"]
+    # Initialize the frequency map for each key
+    sectionFrequency = {}
+    for i in range(len(sections.keys())):
+        sectionFrequency[i] = 0
+    # -1 will refer to if data point is outside the grid
+    sectionFrequency[-1] = 0
+    # go through all the lat longs and determine the section
+    for latLong in latLongs:
+        # Ignore these particular points
+        if(latLong == [0,0] or latLong == [0.754225181062586, -12.295563892977972] or latLong == [4.22356791831445, -68.85519277364834]): continue
+        # calculate the utm and then determine its section
+        utmVals = utm.from_latlon(latLong[0], latLong[1])
+        sectionNum = utils.pointToSection(utmVals[0], utmVals[1], sections)
+        sectionFrequency[sectionNum]+=1
+    print("The section to number of data points for the month of {} is as follows : ".format(month))
+    for sectionKey in sectionFrequency.keys():
+        print("\t{}:{}".format(sectionKey, sectionFrequency[sectionKey]))
+
+def findAvgTrueError(verbose = False):
+    """ Given all the actual distances to the nodes,
+        calculate multilat and determine the error """
+    # Loads in data where the X is the calculated dist to each node
+    # and y is the actul dist to each node
+    X, y = utils.loadRSSModelData(month = "June")
+    # Generate the node locations in a list
+    nodes = utils.loadNodes(True)
+    nodeKeys = list(nodes.keys())
+    nodeLocs = []
+    for key in nodeKeys:
+        nodeLocs.append([nodes[key]["NodeUTMx"],nodes[key]["NodeUTMy"]])
+
+    errors = [0,0]
+    for i in range(len(X)):
+        # get a given row of data
+        tmp_distances = X[i]
+        for j in range(len(tmp_distances)):
+            # if the node had data to a batch, set it to the actual distance
+            if tmp_distances[j]!=0:
+                tmp_distances[j] = y[i][j]
+        # calculate the estimated & actual multilats
+        estimated = np.array(multilat.gps_solve(tmp_distances, list(np.array(nodeLocs))))
+        actual = np.array(multilat.gps_solve(y[i], list(np.array(nodeLocs))))
+        # find the difference in the predicted location
+        dist = np.linalg.norm(estimated-actual)
+        errors[0]+=dist
+        errors[1]+=1
+        if verbose:
+            print("{}, current error : {}, running average error : {}".format(i, dist, errors[0]/errors[1]))
+    # show the average error
+    print(errors[0]/errors[1])
 
 if __name__=="__main__":
     #closestNodeCount()

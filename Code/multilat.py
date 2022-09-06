@@ -172,8 +172,7 @@ def junePredictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False):
 
 #IF ACCEPTED; THEN JUNEPREDICTIONS AND marchPredictions CAN BE DELETED
 def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month="June"):
-    """ This should be combined with the March function in reality, which requires rewriting the util load data function
-        but the premise is the exact same and works the same way."""
+    """Combined march and june predictions."""
 
     if(month =="June"):
         # Load in the June JSON
@@ -213,12 +212,13 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
             if isTriLat and len(distToNodes)==3 and X[idx]["data"][nodeId]>currentMax:
                 continue
 
-            distToNodes.append(utils.calculateDist_3(X[idx]["data"][nodeId]))
+            distToNodes.append(utils.calculateDist_2(X[idx]["data"][nodeId]))
             if dataEntry=="3288000000": nodeId="3288e6"
             nodeLocs.append([nodes[nodeId]["NodeUTMx"],nodes[nodeId]["NodeUTMy"]])
 
             '''
                 TESTING AREA FOR NEW FILTER
+            '''
             '''
             nodeLocation = np.array([nodes[nodeId]["NodeUTMx"],nodes[nodeId]["NodeUTMy"]])
             if(month=="March"):
@@ -230,6 +230,7 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
             actualDist.append(aDist)
             signals.append(X[idx]["data"][nodeId])
             theids.append(nodeId)
+            '''
 
             '''
                 END OF TESTING AREA
@@ -277,6 +278,7 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
         dist = np.linalg.norm(res-gt)
         '''
             TESTING AREA START
+        '''
         '''
         #print("Next")
         #print("Node loc: ", nodeLocs)
@@ -335,7 +337,7 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
             #print("Predicted position: ", res)
             #print("Error: ", dist)
         #input()
-
+        '''
         '''
             TESTING AREA END
         '''

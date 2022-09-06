@@ -11,6 +11,7 @@ import math
 from vincenty import vincenty
 from scipy.optimize import curve_fit
 import pickle
+from kmlInterface import HabitatMap, Habitat
 
 import tensorflow as tf
 from tensorflow.keras.layers import *
@@ -19,7 +20,7 @@ from tensorflow.keras.optimizers import Adam, RMSprop, SGD
 from keras.utils import plot_model
 from tensorflow import keras
 from sklearn.model_selection import train_test_split
-
+import random
 
 def loadNodes(rewriteUTM=False):
     """ Loads in the nodes from the CSV and returns it as a dictionary where the key is its NodeId"""
@@ -38,6 +39,111 @@ def loadNodes(rewriteUTM=False):
         nodes[nodesData[i]["NodeId"]] = nodesData[i]
         del nodes[nodesData[i]["NodeId"]]["NodeId"]
     return nodes
+def distBetweenNodes(node1, node2, Nodes):
+    """ Given 2 node ids and a dictionary of nodes this will calculate the distance between the two """
+    node1Loc = np.array([np.float64(Nodes[node1]["NodeUTMx"]), np.float64(Nodes[node1]["NodeUTMy"])])
+    node2Loc = np.array([np.float64(Nodes[node2]["NodeUTMx"]),np.float64(Nodes[node2]["NodeUTMy"])])
+    dist = np.linalg.norm(node1Loc-node2Loc)
+    return dist
+
+def loadSections():
+    """ Will create a dictionary of section # to coordinates of
+        each square formed within the grid """
+
+    nodes = loadNodes(True)
+
+    # for right now, assuming nodes will always be in a square shape
+    length = int(math.sqrt(len(nodes.keys())))
+    # the number of sections is (length-1)^2
+    sections = {}
+    for i in range((length-1)**2):
+        # the first 0,0 is the X min max,
+        # the second 0,0 is the Y min max
+        sections[i] = [(0,0),(0,0)]
+
+    # the first number after the id will be the distance to the right, then
+    # the left, below, then above
+    grid = [[["3290ef",0,0],["37a200",0,0],["377bc2",0,0],["37917d",0,0]],
+            [["37a5e9",0,0],["376095",0,0],["3275dd",0,0],["328b9b",0,0]],
+            [["3775bf",0,0],["37774c",0,0],["3774a7",0,0],["379611",0,0]],
+            [["3288e6",0,0],["328840",0,0],["377905",0,0],["32820a",0,0]]]
+    # Was initially automating the prepopulation of the above grid,
+    # but due to the grid being slanted it requires a bit more work
+    # so I did the ids manually and populated distances below
+
+    for i in range(len(grid)):
+        for j in range(len(grid[i])):
+            # get the current node id
+            curNode = grid[i][j][0]
+            distRight = 0
+            distAbove = 0
+            # if we're not at the edges, get the distance to the right and above
+            if j!=len(grid[j])-1:
+                nodeRight = grid[i][j+1][0]
+                distRight = distBetweenNodes(curNode, nodeRight, nodes)
+            if i!=0:
+                nodeAbove = grid[i-1][j][0]
+                distAbove = distBetweenNodes(curNode, nodeAbove, nodes)
+            grid[i][j][1] = distRight
+            grid[i][j][2] = distAbove
+
+    # go through every 'section' in the grid and find the bounds for the sections
+    for i in range(length-1):
+        for j in range(length-1):
+            # initialize the minimum and maximum values and then
+            # just take the min and max for each the nodes to the right and below
+            minX = nodes[grid[i][j][0]]["NodeUTMx"]
+            minY = nodes[grid[i+1][j][0]]["NodeUTMy"]
+
+            maxX = nodes[grid[i][j+1][0]]["NodeUTMx"]
+            maxY = nodes[grid[i][j][0]]["NodeUTMy"]
+            # compare the values to the only other smallest/largest on the same level
+            minX = min(minX,nodes[grid[i+1][j][0]]["NodeUTMx"])
+            minY = min(minY,nodes[grid[i+1][j+1][0]]["NodeUTMy"])
+            maxX = max(maxX,nodes[grid[i+1][j+1][0]]["NodeUTMx"])
+            maxY = max(maxY,nodes[grid[i][j+1][0]]["NodeUTMy"])
+
+            sections[i*3+j] = [(minX,minY),(maxX, maxY)]
+
+    return grid, sections, nodes
+
+def pointToSection(dataPointX, dataPointY, sections):
+    """ Given a UTM X, Y value and the section dictionary with the bounds defined, return which x and y value it falls in """
+    # go over all the sections and if the X & Y values lie wtihin the sections bound, then return i
+    for i in range(len(sections)):
+        if (sections[i][0][0]<=dataPointX and sections[i][0][1]<=dataPointY) and (dataPointX<=sections[i][1][0] and dataPointY<=sections[i][1][1]):
+            return i
+    # otherwise return -1 (it's out of bounds)
+    return -1
+
+def convertOldUtm(oldUTMx,oldUTMy, oldNodes=[], newNodes=[]):
+    """ This function will take in a March TestInfo UTMx and convert it
+        to a UTM relative to the new UTM nodes"""
+
+    oldUTMs = np.array([np.float64(oldUTMx),np.float64(oldUTMy)])
+
+    # load in the new and old nodes
+    if oldNodes==[]:
+        oldNodes = loadNodes()
+    if newNodes == []:
+        newNodes = loadNodes(True)
+
+    # calculate the relative distance to each of the old nodes, but save
+    # the location from the new nodes, and then calculate the new utmx, utmy
+    oldNodeDists = []
+    newNodeLocs = []
+
+    # for every node calculate the distance between the given UTMx,UTMy and the old nodes' locations
+    # and then add the same node's location but with the new utms to a list
+    for node in oldNodes.keys():
+        npNodeLoc = np.array([np.float64(oldNodes[node]["NodeUTMx"]),np.float64(oldNodes[node]["NodeUTMy"])])
+        dist = np.linalg.norm(oldUTMs-npNodeLoc)
+        newNodeLocs.append([newNodes[node]["NodeUTMx"],newNodes[node]["NodeUTMy"]])
+        oldNodeDists.append(dist)
+    # once we have this data, we can calculate the location of the old utmx, utmy from the march data
+    # to a new one
+    newUTMx,newUTMy = multilat.gps_solve(oldNodeDists, list(np.array(newNodeLocs)))
+    return newUTMx,newUTMy
 
 def loadBoundaries(redoUtm=False):
     """ Will return the boundaries of the node system """
@@ -57,6 +163,11 @@ def loadBoundaries(redoUtm=False):
             minY = nodes[node]["NodeUTMy"]
     return minX,maxX,minY,maxY
 
+def loadCovariateModel():
+    """ Used to load in the Classifier for the prediction model """
+    loadedModel = pickle.load(open("models/covariateClf", 'rb'))
+    return loadedModel
+
 def loadData(month="March", pruned=False, combined = False):
     """ Loads the data that has been stored from associateTestData,
         month specifies the month the data was taken happened (March or June)
@@ -65,6 +176,11 @@ def loadData(month="March", pruned=False, combined = False):
     if pruned:
         pathName+="Pruned"
     pathName+=".json"
+
+    #Delete after usage.
+    if month == "June":
+        pathName = "../Data/"+month+"/trilatData.json"
+
     #Don't want to ruin the other function just yet; so another parameter if we run the combined June-March prediction
     if combined == True:
         if month == "March":
@@ -72,31 +188,189 @@ def loadData(month="March", pruned=False, combined = False):
     with open(pathName,"r") as f:
         data = json.load(f)
     return data
+def loadCovariateData():
+    """ Using the additional features from the march data,
+        initially we can try using ordinal number values for the habitats """
 
-def loadModelData(month="June", modelType="initial", threshold=-102, verbose=True):
+    # load in the habitat map
+    habitatMap = HabitatMap()
+    data = loadData("March")
+    # Load old and new node data for converting the old UTMs to new
+    oldNodes = loadNodes()
+    newNodes = loadNodes(True)
+    """ Will create a dictionary of the locations from the march associated Test Data gt
+        and then any points from june that falls into a radius of 10m (arbitrarily chosen)
+            - if there are multiple points within this radius, the closest one will be selected as
+            the same habitat type
+    """
+    nodes = list(newNodes.keys())
+    habitatDist = {}
+
+    X = []
+    y = []
+
+    for key in data.keys():
+        # convert the old utm values to new
+        convertedUTMx, convertedUTMy = convertOldUtm(data[key]["GroundTruth"]["TestUTMx"],data[key]["GroundTruth"]["TestUTMy"],oldNodes,newNodes)
+        # use the habitat index to determine the value
+        habIdx, habitatName = habitatMap.whichHabitat(convertedUTMx, convertedUTMy)
+        if habIdx==-1: continue
+        tmp_x = [[0,0] for i in range(len(nodes))]
+        for dataEntry in data[key]["Data"]:
+            nodeKey = dataEntry["NodeId"]
+            if nodeKey=="3288000000": nodeKey="3288e6"
+            nodeIdx = nodes.index(nodeKey)
+            assert(nodeKey==nodes[nodeIdx])
+            tmp_x[nodeIdx][0]+=dataEntry["TagRSSI"]
+            tmp_x[nodeIdx][1]+=1
+        # then average the values in this 2 minute time span
+        x = [0 for i in range(len(nodes))]
+        for i in range(len(tmp_x)):
+            if tmp_x[i][1]==0:continue
+            x[i]=tmp_x[i][0]/tmp_x[i][1]
+
+        y.append(habIdx)
+        X.append(x)
+        if habitatName not in habitatDist:
+            habitatDist[habitatName] = 0
+        habitatDist[habitatName]+=1
+
+    assert(len(X)==len(y))
+    print("From the march data, X has {} and y has {} values".format(len(X),len(y)))
+    # now load in the June data
+    juneData = loadData(month="June")
+    juneX = juneData["X"]
+    june_y = juneData["y"]
+    assert(len(juneX)==len(june_y))
+
+    for i in range(len(juneX)):
+        # get the june utm values
+        juneUTM = utm.from_latlon(june_y[i][0], june_y[i][1])
+        # use the habitat index to determine the value
+        habIdx, habitatName = habitatMap.whichHabitat(juneUTM[0], juneUTM[1])
+
+        if habIdx==-1: continue
+
+        tmp_x = [0 for i in range(len(nodes))]
+        for nodeEntry in juneX[i]["data"].keys():
+            nodeKey = nodeEntry
+            if nodeKey=="3288000000": nodeKey="3288e6"
+            nodeIdx = nodes.index(nodeKey)
+            assert(nodeKey==nodes[nodeIdx])
+            tmp_x[nodeIdx]=juneX[i]["data"][nodeEntry]
+        X.append(tmp_x)
+        y.append(habIdx)
+        if habitatName not in habitatDist:
+            habitatDist[habitatName] = 0
+        habitatDist[habitatName]+=1
+
+    print("After applying the covariate habitat map, X has {} and y has {} values".format(len(X),len(y)))
+
+    print("The distribution of habitat values is ")
+    for habKey in habitatDist.keys():
+        print(habKey,habitatDist[habKey])
+
+    X = np.array(X)
+    y = np.array(y)
+    assert(len(X)==len(y))
+
+    return X, y
+
+def loadRSSModelData(month="June",includeCovariatePred = False):
+    """ This is similar to loading model data, but the y values, instead of being offsets to correct
+        the error derived from multilat, are the distances to each node"""
+
+    # if we want to include the habitat as a factor, then load in the classification
+    covariateModel = None
+    habitatMap = HabitatMap()
+    if includeCovariatePred:
+        covariateModel = loadCovariateModel()
+    # load in the data
+    data = loadData(month)
+    X_vals = data["X"]
+    y_vals = data["y"]
+    assert(len(X_vals)==len(y_vals))
+    # load in the nodes
+    nodes = loadNodes(rewriteUTM=True)
+    nodeKeys = list(nodes.keys())
+    xInputNum = len(nodeKeys)
+    # starting idx is either 0 or 1 if we include the habitat,
+    # but this has the opportunity to be increased later if we want to have multiple
+    # features
+    startIdx = 0
+    if includeCovariatePred:
+        xInputNum+=1
+        startIdx+=1
+    X = []
+    y = []
+    for i in range(len(X_vals)):
+        tmp_x = [0 for i in range(xInputNum)]
+        # signal_X is to be able to predict the habitat from signals
+        signal_X = [0 for i in range(len(nodeKeys))]
+        tmp_y = [0 for i in range(len(nodeKeys))]
+        # ground truth location
+        tagGt = utm.from_latlon(y_vals[i][0], y_vals[i][1])
+
+        for nodeNum in range(len(nodeKeys)):
+            nodeKey = nodeKeys[nodeNum]
+            nodeLoc = np.array([np.float64(nodes[nodeKey]["NodeUTMx"]), np.float64(nodes[nodeKey]["NodeUTMy"])])
+            tagLoc = np.array([np.float64(tagGt[0]),np.float64(tagGt[1])])
+            tmp_y[nodeNum] = np.linalg.norm(nodeLoc-tagLoc)
+            if nodeKey not in X_vals[i]["data"] or X_vals[i]["data"][nodeKey]<-102:
+                # and then calculate this node's relative distance to the tag
+                continue
+            else:
+                # otherwise set the relative x value equivalent to the distance
+                tmp_x[startIdx+nodeNum] = calculateDist_2(X_vals[i]["data"][nodeKey])
+                signal_X[nodeNum] = X_vals[i]["data"][nodeKey]
+
+        if includeCovariatePred:
+            # will start with just ordinal but may switch to different encoding,
+            # model dependent
+            #habitatPred, habitat_title = habitatMap.whichHabitat(tagGt[0], tagGt[1])
+            #if habitatPred==-1:
+            habitatPred = covariateModel.predict(np.array([signal_X]))[0]
+
+            tmp_x[0] = habitatPred
+        X.append(tmp_x)
+        y.append(tmp_y)
+    X = np.array(X)
+    y = np.array(y)
+
+    print(len(X), len(y))
+    assert(len(X)==len(y))
+
+    return X,y
+
+def loadModelData(month="June", modelType="initial", threshold=-102, includeCovariatePred = False, verbose=True):
     """ Unlike the regular loadData function, this one presents the information in a format
         specifically for a model to train on. The way the data will differ depends on if it's initial
         (where we'll be trying to predict offsets of the calculated values) or if it's sequential, given
         n steps predict the current step"""
-
+    covariateModel = None
+    if includeCovariatePred:
+        covariateModel = loadCovariateModel()
     if month=="June":
-        #res = multilat.junePredictions(threshold,keepNodeIds=True)
         res = multilat.predictions(threshold,keepNodeIds=True,month="June")
     else:
         res = multilat.predictions(threshold,keepNodeIds=True,month="March")
-        #res = multilat.marchPredictions(threshold)
+
     rewriteUtm = False
     if month=="June":
         rewriteUtm = True
 
     nodes = loadNodes(rewriteUTM=rewriteUtm)
+    notUsed, sections, _ = loadSections()
 
     # the input to the model is going to be the calculated distance to each node
     # plus the projected output
     nodeKeys = list(nodes.keys())
 
     xInputNum = len(nodeKeys)+2
-
+    startIdx = 2
+    if includeCovariatePred:
+        xInputNum+=1
+        startIdx+=1
     X = []
     y = []
 
@@ -105,7 +379,7 @@ def loadModelData(month="June", modelType="initial", threshold=-102, verbose=Tru
     for entry in res.keys():
         if verbose:
             print("{}/{}".format(counter, numberOfVals))
-        x = [0 for i in range(xInputNum+2)]
+        x = [0 for i in range(xInputNum)]
         x[0] = res[entry]["res"][0]
         x[1] = res[entry]["res"][1]
         tmp_y = res[entry]["gt"]-res[entry]["res"]
@@ -122,8 +396,12 @@ def loadModelData(month="June", modelType="initial", threshold=-102, verbose=Tru
             # otherwise set the relative x value equivalent to the distance
             nodeIdx = res[entry]["nodeIds"].index(nodeKeys[nodeNum])
 
-            x[2+nodeNum] = res[entry]["nodeDists"][nodeIdx]
-
+            x[startIdx+nodeNum] = res[entry]["nodeDists"][nodeIdx]
+        if includeCovariatePred:
+            # will start with just ordinal but may switch to different encoding,
+            # model dependent
+            habitatPred = covariateModel.predict(np.array([x[startIdx:]]))
+            x[2] = habitatPred[0]
 
         x = np.array(x)
         tmp_y = np.array(tmp_y)
@@ -424,6 +702,8 @@ def rewriteMarchData(month="March"):
     finalData['y']=Y
     with open("../Data/"+month+"/associatedMarchData_2.json","w+") as f:
         json.dump(finalData, f)
+
+
 def LoadSeqData(month="June"):
     '''
         Idea is that if we give the machine the distances it is away from other nodes and the signal strenght, we would be able to predict the distance it is away from
@@ -442,6 +722,7 @@ def LoadSeqData(month="June"):
     y = data["y"]
     newX = []
     newY = []
+    newZ = []
     #Going to gather the new data pairs in the form of:
     #Elements of newX will look like: [
     #                                   [signalStrength of the current node in the batch],
@@ -469,6 +750,7 @@ def LoadSeqData(month="June"):
         signals = getSignals(item["data"])
 
         for key in keys:
+            if(key == "3288000000"): key="3288e6"
             #If the key has wrong outside of range signal, we skip it
             if key in skipKeys:continue
 
@@ -479,6 +761,7 @@ def LoadSeqData(month="June"):
             #and skip the outside of the range signals
             sSignals = []
             for newKey in keys:
+                if(newKey == "3288000000"): key="3288e6"
                 if newKey == key: continue
                 if newKey in skipKeys:continue
                 sSignals.append(signals[newKey])
@@ -491,12 +774,14 @@ def LoadSeqData(month="June"):
             actualDist = np.linalg.norm(utmsNodePosArr-utmDronePosArr)
 
             #Eventually add these data pairs into the newX and newY, which will be saved for later training and modelling.
-            newX.append([item['data'][key][2],item['data'][key][0], sSignals, index])
+            newX.append([item['data'][key][2],item['data'][key][0], sSignals, index, key])
             newY.append(actualDist)
+            newZ.append(dronePos)
     assert(len(newX) == len(newY))
     finalData = {}
     finalData['X']=newX
     finalData['y']=newY
+    finalData['Z']=newZ
 
     #Save the file in a json, that will be used for modelling / training
     with open("../Data/"+month+"/distanceNNData.json","w+") as f:
@@ -575,11 +860,28 @@ def FunctionalModel():
     for i in range(0,len(y_test)):
         print(predicted[i], "and",y_test[i], "and", x_test[i])
         input()
-'''
-    This function is similar to the check_dissonance function, but is different from it to an extent.
-    check_dissonance can be deleted, once this one is working properly.
-'''
+
 def error_calculation(arr):
+    '''
+        This function is similar to the check_dissonance function, but is different from it to an extent.
+        check_dissonance can be deleted, once this one is working properly.
+        Jesus it's such a mindfuck to explain what this is doing, but I will try.
+        So, this function in simple terms going to calculate the error likliness for each signal in a batch.
+        Obviously if there are more 'faulty' signals, then the other 'good' signal values are going to increase
+        as well. We don't want that. So, this function is going to be called recursively after the highest
+        error is going to be removed, and perhaps changed into a better representation of the signal. OR
+        this function could be used just to identify the best signals for trilateration.
+
+        The way it calcualtes the error is by calculating the otherNode locations to the node that the current signal
+        is received by. By the assumption that the lower the signal, the higher the 'drone' is and that means the otherNodes are
+        also higher, meaning it should have the highest nodeDistanceMean whatsoever.
+        Then we would check how much percentage is it needed to get to below and above the certain value, based on whether the signal
+        is lower or higher than the current one.
+        And then punishment / reward numerator is added, then it is all divided by a size (the highest probability it can get)-
+        Thus, giving us a cool value for error. But as said before, if there is a wrong signal in the batch, that is going to increase the
+        other signals' errors as well. Luckily, the highest is always a value that has the highest error in the signal. So it's cool dawg,
+        everything is going to be fine - this is going to be pretty cool.
+    '''
     print(arr)
     currSig = arr[0]
     currDistS = arr[1]
@@ -587,7 +889,7 @@ def error_calculation(arr):
     currOtherDistS = arr[3]
     size = (len(currOtherSig))
     numerator = 0
-    endPercent = 36
+    endPercent = 50
     errorDistances = []
     for i in range(0,len(currOtherSig)):
         compare = currOtherDistS[i]
@@ -604,58 +906,59 @@ def error_calculation(arr):
                 val2 = val0 *(1-((j+1)/100))
                 percent2 = j+1
         if(currOtherSig[i] > currSig):
-
+            '''
             print(currOtherSig[i], "is bigger than ", currSig)
 
             print(currOtherSig[i], currSig)
             print(val0, compare)
             print(val1, compare, percent)
             print(val2, compare, percent2)
-
+            '''
 
             if(val0 < compare):
-                addNum = (0.5*(percent)/endPercent)
+                addNum = (1*(percent)/endPercent)
                 numerator += addNum
-                print("Possible dissonance")
-                print(val0, " is less than ", compare, "so we add", numerator)
+                #print("Possible dissonance")
+                #print(val0, " is less than ", compare, "so we add", addNum)
                 #numerator += (1*(endPercent-percent)/endPercent)
             else:
-                addNum = (0.5*(endPercent-percent2)/endPercent)
+                addNum = (0.33*(endPercent-percent2)/endPercent)
                 numerator += addNum
-                print("Good for first")
-                print(val0, " is bigger than ", compare, "so we add", numerator)
+                #print("Good for first")
+                #print(val0, " is bigger than ", compare, "so we add", addNum)
             #input()
 
         if(currOtherSig[i] < currSig):
-
+            '''
             print(currOtherSig[i], "is less than ", currSig)
             print(currOtherSig[i], currSig)
             print(val0, compare)
             print(val1, compare, percent)
             print(val2, compare, percent2)
-
+            '''
 
             if(val0 > compare):
-                addNum = (0.5*(percent2)/endPercent)
+                addNum = (1*(percent2)/endPercent)
                 numerator += addNum
-                print("Possible dissonance")
-                print(val0, " is bigger than ", compare, "so we add", numerator)
+                #print("Possible dissonance")
+                #print(val0, " is bigger than ", compare, "so we add", addNum)
                 #numerator += (1*(endPercent-percent2)/endPercent)
             else:
-                addNum = (0.5 *(endPercent-percent)/endPercent)
+                addNum = (0.33 *(endPercent-percent)/endPercent)
                 numerator += addNum
 
-                print("Good for first")
-                print(val0, " is less than ", compare, "so we add", numerator)
+                #print("Good for first")
+                #print(val0, " is less than ", compare, "so we add", addNum)
             #print(numerator)
             #input()
         if(currOtherSig[i] == currSig):
             if(val0 > compare):
-                addNum = (0.5*(endPercent-percent2)/endPercent)
+                addNum = (0.33*(endPercent-percent2)/endPercent)
                 numerator += addNum
             else:
-                addNum = (0.5 *(endPercent-percent)/endPercent)
+                addNum = (0.33 *(endPercent-percent)/endPercent)
                 numerator += addNum
+        '''
         if(addNum != 0):
             dist1 = calculateDist_2(currSig)
             dist2 = calculateDist_2(currOtherSig[i])
@@ -669,25 +972,39 @@ def error_calculation(arr):
                     err = err*(percent2/endPercent)
                 else:
                     err = -err*(percent/endPercent)
-            errorDistances.append([addNum, err, currOtherSig[i]])
+            #errorDistances.append([addNum, err, currOtherSig[i])
+            if(len(errorDistances) == 0):
+                errorDistances.append([currSig, arr[len(arr)-2]])
+        '''
     '''
         The error distances need to compare each signal error % in a bacth, to successfully indentify
         the signal(s) that are wrong. After identifying those signals, we can make a proper guess at the
         error distances. Otherwise, it is going to just mess it up.
     '''
+    '''
+        Another idea, is to recursively run this code, getting the highest error signal out of the batch,
+        calculating the percentage for error again (then the likely 'big' error node will not affect the others)
+        and then do it until we have only 3 signals left. Those 3 signals will be used for trilateration.
+    '''
 
 
     #print(numerator)
     #print(size)
-    print(errorDistances)
-    print(round(numerator/size*100,2), "%")
-    input()
 
+    #print(errorDistances)
+    #print(round(numerator/size*100,2), "%")
 
+    return [arr, round(numerator/size*100,2)]
 
-
-
-
+def removeHighestError(arr, distVal):
+    index = None
+    for e in range(0,len(arr)):
+        for i in range(0,len(arr[e][3])):
+            if(arr[e][3][i] == distVal):
+                index = i
+        arr[e][3].pop(index)
+        arr[e][2].pop(index)
+    return arr
 
 
 
@@ -697,6 +1014,7 @@ def loadANNData_3():
         then train the signal and the error on the model. Model would try to predict the error that is
         contributed to the signal~distance.
     '''
+    grid, sections, nodes = loadSections()
     month = "June"
     pathName = "../Data/"+month+"/distanceNNData.json"
     with open(pathName,"r") as f:
@@ -715,15 +1033,25 @@ def loadANNData_3():
     badCount = 0
     goodCount2 = 0
     badCount2 = 0
+    dronePos = None
+
+    fileX = []
+    fileY = []
     for index, i in enumerate(data["X"]):
         actual = data['y'][index]
         predicted = calculateDist_2(i[0])
         err = actual - predicted
         err = np.float64(err)
-        #print(i[0], i[1],relSignals, i[2], actual, predicted, err, i[3])
+        #print("SIGNAL VALUE TO BE MANUPULATED")
+        #print(i[0], i[1], i[2], actual, predicted, err, i[3])
+        #input()
         #print(err)
-        importantD = [i[0], i[1], i[2], actual, predicted, err, i[3]]
+        importantD = [i[0], i[1], i[2], actual, predicted, err, i[3], i[4]]
+
         importantD[1] = sum(importantD[1])/len(importantD[1])
+        if(dronePos != data["Z"][index]):
+            keptDronePos = dronePos
+            dronePos = data["Z"][index]
         if(i[3] == batchN):
             total = 0
             for number in i[1]:
@@ -748,10 +1076,78 @@ def loadANNData_3():
             # The next value then will tell us how likely the error is
             # Those two values are going to be used by the machine along with the signal, to predict the error
             # Then the error is going to be added to the calcualted distance, giving a better result for the RSSI ~ Distance
+            print("\n")
+            print("LETS START")
+            print("This is the data before selection: ")
+            print(importantDs)
+            #input()
+            if(len(importantDs) < 3 or len(importantDs[0][3])== 0):
+                canCont = True
+            else:
+                canCont = False
+            while canCont == False:
+                print("Started again, mate!")
+                errorCalcs = []
+                newImportants = []
+                for important in importantDs:
+                    newImportant = error_calculation(important)
+                    errorCalcs.append(newImportant[1])
+                    newImportants.append(newImportant[0])
+                maximumError = -1
+                maximumErrorIndex = None
+                for maxEr in range(0, len(errorCalcs)):
+                    if(errorCalcs[maxEr] > maximumError):
+                        maximumError = errorCalcs[maxEr]
+                        maximumErrorIndex = maxEr
+                maxIndices = []
+                print("This is the error calculation! ", errorCalcs)
+                while(len(errorCalcs) != 3):
+                    maximumError2 = -1
+                    maximumErrorIndex2 = None
+                    for maxEr2 in range(0, len(errorCalcs)):
+                        if(errorCalcs[maxEr2] > maximumError2):
+                            maximumError2 = errorCalcs[maxEr2]
+                            maximumErrorIndex2 = maxEr2
+                    maxIndices.append(maximumErrorIndex2)
+                    errorCalcs.pop(maximumErrorIndex2)
+                print(newImportants)
+                #input()
+                if(len(newImportants) == 3):
+                    canCont = True
+                else:
+                    for toPop in maxIndices:
+                        print("This is ",toPop)
+                        popped = newImportants.pop(toPop)
+                        popped = popped[1]
+                    importantDs = newImportants
+                    #popped = newImportants.pop(maximumErrorIndex)
+                    #popped = popped[1]
+                    #print(popped)
+                    #importantDs = removeHighestError(newImportants, popped)
+            print("So this is going to be used for Trilateration: ")
+            '''
+                Gathering the data for a trilateration json ahhahaha
+            '''
+            utmCord = utm.from_latlon(keptDronePos[0],keptDronePos[1])
+            inside = pointToSection(utmCord[0], utmCord[1], sections)
+            print("The drone is:",inside)
+            if( inside != -1):
+                fileData = {}
+                for fileE in importantDs:
+                    fileData[fileE[len(fileE)-1]] = fileE[0]
+                #print(fileData)
+                outerFileData = {}
+                outerFileData["time"] = random.randint(0,1000000)
+                outerFileData["tag"] = random.randint(0,1000000)
+                outerFileData["data"] = fileData
 
-            for important in importantDs:
-                error_calculation(important)
-
+                fileX.append(outerFileData)
+                fileY.append(keptDronePos)
+                print(importantDs)
+                #print(keptDronePos)
+                #print(outerFileData)
+                print("Good point")
+            input()
             #Decide if the idea is good or not here, batch data gathered
             maxi2 = 0
             mini2 = 10000000
@@ -788,7 +1184,7 @@ def loadANNData_3():
                 badCount2 += 1
             #Reset the batch data, start with new batch
             a = 0
-            batchN += 1
+            batchN = i[3]
             distanceSum = []
             actualDist = []
             allSignals = []
@@ -802,12 +1198,20 @@ def loadANNData_3():
             importantDs.append(importantD)
             a += 1
 
-        #input()
         iput1.append(np.array(i[0]))
         output.append(np.array(err))
     print(goodCount, badCount)
     print(goodCount2, badCount2)
     input()
+
+    assert(len(fileX) == len(fileY))
+    finalData = {}
+    finalData['X']=fileX
+    finalData['y']=fileY
+
+    #Save the file in a json, that will be used for modelling / training
+    with open("../Data/"+month+"/trilatData.json","w+") as f:
+            json.dump(finalData, f)
     return iput1, output
 
 
@@ -877,6 +1281,7 @@ def getNodedistances(arr):
     skipKeys = []
     #Adds the NodeIDs that has signals out of the equation range -103<RSSI<-72
     for keyS in keys:
+        if(keyS == "3288000000"): key="3288e6"
         currentNode = arr[keyS]
         if(arr[keyS][2][0] < -101):
             skipKeys.append(keyS)
@@ -886,6 +1291,7 @@ def getNodedistances(arr):
     #Returns a list, in the form [[Nodes distances away from the current node],[position of the current node],[signal corresponding to the node]]
     #Also returns the list that contains the taken out NodeIDs
     for key in keys:
+        if(key == "3288000000"): key="3288e6"
         if(key in skipKeys):continue
         currentNode = arr[key]
         nodeDistances=[]
@@ -1170,9 +1576,7 @@ def value_finder(values):
             mini = values[i][1]
             index = i
     return mini, index
-'''
-    This function
-'''
+
 def closest_to(values, index):
     keepIt = []
     for i in range(0, len(values)):
@@ -1227,4 +1631,5 @@ if __name__=="__main__":
     #loadANNData()
     #LoadSeqData()
     #loadANNData_2()
-    FunctionalModel()
+    loadANNData_3()
+    #FunctionalModel()

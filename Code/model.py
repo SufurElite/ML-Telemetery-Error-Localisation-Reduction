@@ -6,7 +6,7 @@ https://github.com/dmlc/xgboost/blob/master/demo/guide-python/multioutput_regres
 import numpy as np
 from matplotlib import pyplot as plt
 import xgboost as xgb
-from utils import loadModelData, LoadMLPData, loadANNData, loadANNData_2, loadRSSModelData, loadCovariateData, loadSections, pointToSection
+from utils import loadModelData, LoadMLPData, loadANNData, loadANNData_2, loadRSSModelData, loadCovariateData, loadSections, pointToSection, loadNodes
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
@@ -26,7 +26,7 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     """
     # Load in the data by the inputted boolean
     if isErrorData:
-        X, y = loadModelData(month="June",threshold=-96, verbose=False, includeCovariatePred=useCovariate)
+        X, y = loadModelData(month="June",threshold=-101, verbose=False, includeCovariatePred=useCovariate)
     else:
         X, y = loadRSSModelData(month="June",includeCovariatePred=True)
 
@@ -43,9 +43,27 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     # find the average error for the whole dataset
     avgError = [0,0]
 
+    # determine the different node locations in the order derived from list(nodes.keys()) - order matters
+    nodes = loadNodes(rewriteUTM=True)
+    nodeLocs = []
+    for node in list(nodes.keys()):
+        nodeLocs.append([nodes[node]["NodeUTMx"],nodes[node]["NodeUTMy"]])
+
     for idx in range(len(yPred)):
-        gt = np.array([np.float64(X[idx][0]+y[idx][0]), np.float64(X[idx][1]+y[idx][1])])
-        predicted = np.array([np.float64(yPred[idx][0]+X[idx][0]),np.float64(yPred[idx][1]+X[idx][1])])
+        if isErrorData:
+            gt = np.array([np.float64(X[idx][0]+y[idx][0]), np.float64(X[idx][1]+y[idx][1])])
+            predicted = np.array([np.float64(yPred[idx][0]+X[idx][0]),np.float64(yPred[idx][1]+X[idx][1])])
+        else:
+            tmp_y = []
+            actual_y = []
+            tmp_locs = []
+            for i in range(len(y[idx])):
+                if y[idx][i]==0: continue
+                actual_y.append(y[idx][i])
+                tmp_y.append(yPred[idx][i])
+                tmp_locs.append(nodeLocs[i])
+            gt = gps_solve(actual_y,np.array(list(tmp_locs)))
+            predicted = gps_solve(tmp_y,np.array(list(tmp_locs)))
         dist = np.linalg.norm(predicted-gt)
         avgError[0]+=dist
         avgError[1]+=1
@@ -67,10 +85,7 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     grid, sections, nodes = loadSections()
     # load in the habitat
     habitatMap = HabitatMap()
-    # determine the different node locations in the order derived from list(nodes.keys()) - order matters
-    nodeLocs = []
-    for node in list(nodes.keys()):
-        nodeLocs.append([nodes[node]["NodeUTMx"],nodes[node]["NodeUTMy"]])
+
 
     # errorLocs will contain all the locations of the errors to plot
     errorLocs = []
@@ -91,13 +106,24 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     for idx in range(len(yTestPred)):
         gt = None
         predicted = None
+
         # determine the ground truth and predicted values according to the data provided to the model
         if isErrorData:
             gt = np.array([np.float64(X_test[idx][0]+y_test[idx][0]), np.float64(X_test[idx][1]+y_test[idx][1])])
             predicted = np.array([np.float64(yTestPred[idx][0]+X_test[idx][0]),np.float64(yTestPred[idx][1]+X_test[idx][1])])
         else:
-            gt = gps_solve(y_test[idx],np.array(list(nodeLocs)))
-            predicted = gps_solve(yTestPred[idx],np.array(list(nodeLocs)))
+            tmp_y = []
+            actual_y = []
+            tmp_locs = []
+            for i in range(len(y_test[idx])):
+                if y_test[idx][i]==0: continue
+                actual_y.append(y_test[idx][i])
+                tmp_y.append(yTestPred[idx][i])
+                tmp_locs.append(nodeLocs[i])
+            gt = gps_solve(actual_y,np.array(list(tmp_locs)))
+            predicted = gps_solve(tmp_y,np.array(list(tmp_locs)))
+            #gt = gps_solve(y_test[idx],np.array(list(nodeLocs)))
+            #predicted = gps_solve(yTestPred[idx],np.array(list(tmp_locs)))
         dist = np.linalg.norm(predicted-gt)
         errorDirections.append([predicted[0]-gt[0],predicted[1]-gt[1]])
         allErrors.append(dist)
@@ -118,7 +144,6 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
             else:
                 freqErrorHabitats[habIdx].append(dist)
             freqErrorSections[sec].append(dist)
-
     # Display the section frequency errors
     if useThresholdError:
         print("The test errors over {} m had the following section distribution: ".format(sectionThreshold))

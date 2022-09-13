@@ -173,7 +173,6 @@ def junePredictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False):
 #IF ACCEPTED; THEN JUNEPREDICTIONS AND marchPredictions CAN BE DELETED
 def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month="June"):
     """Combined march and june predictions."""
-
     if(month =="June"):
         # Load in the June JSON
         data = utils.loadData(month="June",combined=True)
@@ -230,8 +229,8 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
             actualDist.append(aDist)
             signals.append(X[idx]["data"][nodeId])
             theids.append(nodeId)
-            '''
 
+            '''
             '''
                 END OF TESTING AREA
             '''
@@ -307,6 +306,7 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
         #print(lineValues)
         check = None
         newLinesValues = lineValues.copy()
+        #print("y")
         update = utils.rewrite(lineValues, newLinesValues)
         #print("This is DIST TO NODES: ", distToNodes)
         if(check != update):

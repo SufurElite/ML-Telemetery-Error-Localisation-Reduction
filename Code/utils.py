@@ -861,7 +861,7 @@ def FunctionalModel():
         print(predicted[i], "and",y_test[i], "and", x_test[i])
         input()
 
-def error_calculation(arr):
+def error_calculation(arr, identified):
     '''
         This function is similar to the check_dissonance function, but is different from it to an extent.
         check_dissonance can be deleted, once this one is working properly.
@@ -879,10 +879,9 @@ def error_calculation(arr):
         is lower or higher than the current one.
         And then punishment / reward numerator is added, then it is all divided by a size (the highest probability it can get)-
         Thus, giving us a cool value for error. But as said before, if there is a wrong signal in the batch, that is going to increase the
-        other signals' errors as well. Luckily, the highest is always a value that has the highest error in the signal. So it's cool dawg,
-        everything is going to be fine - this is going to be pretty cool.
+        other signals' errors as well.
     '''
-    print(arr)
+    #print(arr)
     currSig = arr[0]
     currDistS = arr[1]
     currOtherSig = arr[2]
@@ -898,6 +897,10 @@ def error_calculation(arr):
         val2 = currDistS
         percent = 0
         percent2 = 0
+        print("\n")
+        print(i,". Run")
+        print("#################################")
+
         for j in range(0,endPercent):
             if(val0 *(1+(j/100)) < compare):
                 val1 = val0 *(1+((j+1)/100))
@@ -906,58 +909,94 @@ def error_calculation(arr):
                 val2 = val0 *(1-((j+1)/100))
                 percent2 = j+1
         if(currOtherSig[i] > currSig):
-            '''
-            print(currOtherSig[i], "is bigger than ", currSig)
 
+            print("\n")
+            print(currOtherSig[i], "is bigger than ", currSig)
             print(currOtherSig[i], currSig)
             print(val0, compare)
             print(val1, compare, percent)
             print(val2, compare, percent2)
-            '''
+            print("\n")
+
 
             if(val0 < compare):
-                addNum = (1*(percent)/endPercent)
-                numerator += addNum
-                #print("Possible dissonance")
-                #print(val0, " is less than ", compare, "so we add", addNum)
-                #numerator += (1*(endPercent-percent)/endPercent)
+                if(insideIdentified_2(identified, compare) == False):
+                    addNum = (0.1*(percent)/endPercent)
+                    numerator += addNum
+                    print("Possible dissonance")
+                    print(val0, " is less than ", compare, "so we add", addNum)
+                else:
+                    print("Possible dissonance, but ")
+                    print("Inside the identified error signals")
+                    addNum = (0.025*(endPercent-percent)/endPercent)
+                    numerator += addNum
+                    print(val0, "is less than", compare, "but", currOtherSig[i], "is in identified error signals")
+                    print("So we add", addNum)
             else:
-                addNum = (0.33*(endPercent-percent2)/endPercent)
+                addNum = (0.05*(endPercent-percent2)/endPercent)
                 numerator += addNum
-                #print("Good for first")
-                #print(val0, " is bigger than ", compare, "so we add", addNum)
-            #input()
+                print("Good for first")
+                print(val0, " is bigger than ", compare, "so we add", addNum)
 
         if(currOtherSig[i] < currSig):
-            '''
+
+            print("\n")
             print(currOtherSig[i], "is less than ", currSig)
             print(currOtherSig[i], currSig)
             print(val0, compare)
             print(val1, compare, percent)
             print(val2, compare, percent2)
-            '''
+            print("\n")
+
 
             if(val0 > compare):
-                addNum = (1*(percent2)/endPercent)
-                numerator += addNum
-                #print("Possible dissonance")
-                #print(val0, " is bigger than ", compare, "so we add", addNum)
-                #numerator += (1*(endPercent-percent2)/endPercent)
+                if(insideIdentified_2(identified, compare) == False):
+                    addNum = (0.1*(percent2)/endPercent)
+                    numerator += addNum
+                    print("Possible dissonance")
+                    print(val0, " is bigger than ", compare, "so we add", addNum)
+                else:
+                    print("Possible dissonance, but ")
+                    print("Inside the identified error signals")
+                    addNum = (0.025*(endPercent-percent2)/endPercent)
+                    numerator += addNum
+                    print(val0, "is bigger than", compare, "but", currOtherSig[i], "is in identified error signals")
+                    print("So we add", addNum)
             else:
-                addNum = (0.33 *(endPercent-percent)/endPercent)
+                addNum = (0.05 *(endPercent-percent)/endPercent)
                 numerator += addNum
 
-                #print("Good for first")
-                #print(val0, " is less than ", compare, "so we add", addNum)
-            #print(numerator)
-            #input()
+                print("Good for first")
+                print(val0, " is less than ", compare, "so we add", addNum)
+
         if(currOtherSig[i] == currSig):
-            if(val0 > compare):
-                addNum = (0.33*(endPercent-percent2)/endPercent)
-                numerator += addNum
+            print("\n")
+            print(currOtherSig[i], "is equal to ", currSig)
+            print(currOtherSig[i], currSig)
+            print(val0, compare)
+            print(val1, compare, percent)
+            print(val2, compare, percent2)
+            print("\n")
+
+            if(insideIdentified_2(identified, compare) == False):
+                if(val0 > compare):
+                    addNum = (0.1*(percent2)/endPercent)
+                    numerator += addNum
+                else:
+                    addNum = (0.1 *(percent)/endPercent)
+                    numerator += addNum
             else:
-                addNum = (0.33 *(endPercent-percent)/endPercent)
-                numerator += addNum
+                if(val0 > compare):
+                    addNum = (0.05*(percent2)/endPercent)
+                    numerator += addNum
+                else:
+                    addNum = (0.05*(percent)/endPercent)
+                    numerator += addNum
+
+        #input()
+        print("#################################")
+        print("\n")
+
         '''
         if(addNum != 0):
             dist1 = calculateDist_2(currSig)
@@ -996,15 +1035,125 @@ def error_calculation(arr):
 
     return [arr, round(numerator/size*100,2)]
 
-def removeHighestError(arr, distVal):
-    index = None
-    for e in range(0,len(arr)):
-        for i in range(0,len(arr[e][3])):
-            if(arr[e][3][i] == distVal):
-                index = i
-        arr[e][3].pop(index)
-        arr[e][2].pop(index)
-    return arr
+def removeHighestError(arr, arr2, identified):
+    arr2_sorted = sorted(arr2)
+    print("\n")
+    print("removeErrorFunction")
+    print("\n")
+    lowB = deviation(arr2, arr2_sorted[0])
+    uppB = deviation(arr2, arr2_sorted[len(arr2_sorted)-1])
+    if(len(identified) == 0):
+        if(lowB > uppB):
+            index = findIndex(arr2, arr2_sorted[0])
+            print(arr2[index])
+            print(arr[index])
+            identified.append([arr[index], index])
+        else:
+            index = findIndex(arr2, arr2_sorted[len(arr2)-1])
+            #print(arr[index])
+            #print(arr2[index])
+            identified.append([arr[index], index])
+        print("\n")
+        print(arr)
+        print(arr2)
+        print(identified)
+        print("\n")
+        return arr, identified
+    elif(len(arr) - len(identified) == 3):
+        print("\n")
+        print(arr)
+        print("\n")
+        print(identified)
+        for ident in identified:
+            arr.remove(ident[0])
+
+        return arr, identified
+    else:
+        inside = []
+        outside = []
+        lowest = 100
+        highest = -1
+        for err in range(0,len(arr2)):
+
+            if(insideIdentified(identified, err)):
+                continue
+            else:
+                if(arr2[err] > highest):
+                    highest = arr2[err]
+                    indexHigh = err
+                if(arr2[err] < lowest):
+                    lowest = arr2[err]
+                    indexLow = err
+        print(lowest, highest)
+        print(indexLow, indexHigh)
+        lowB = deviation(arr2, lowest)
+        uppB = deviation(arr2, highest)
+
+        #Finding which one to take in
+        print(arr2[indexLow])
+        print(arr[indexLow])
+        print(arr[indexHigh])
+        print(arr2[indexHigh])
+        print(lowB, uppB)
+        print(arr2_sorted)
+        if(lowB > uppB):
+            print(arr2[indexLow])
+            print(arr[indexLow])
+            identified.append([arr[indexLow], indexLow])
+        else:
+            print(arr[indexHigh])
+            print(arr2[indexHigh])
+            identified.append([arr[indexHigh], indexHigh])
+        print("\n")
+        print(arr)
+        print(arr2)
+        print(identified)
+        print("\n")
+        return arr, identified
+
+    #input()
+def deviation(arr, value):
+    total = 0
+    for i in range(0, len(arr)):
+        total += pow(arr[i]-value,2)
+    result = sqrt(total/(len(arr)-1))
+    return result
+
+def insideIdentified(arr, index):
+    for i in range(0, len(arr)):
+        if(arr[i][1] == index):
+            return True
+    return False
+
+def insideIdentified_2(arr, value):
+    for i in range(0, len(arr)):
+        if(arr[i][0][1] == value):
+            return True
+    return False
+
+def findIndex(arr, value):
+    for i in range(0, len(arr)):
+        if(arr[i] == value):
+            return i
+def testLowest(arr):
+    err = []
+    for i in range(0,len(arr)):
+        err.append(arr[i][6])
+    ident = []
+    while(len(arr) - len(ident) != 3):
+        highest = -1
+        highestIndex = None
+        for j in range(0,len(err)):
+            if(abs(err[j]) > highest and j not in ident):
+                highest = abs(err[j])
+                highestIndex = j
+        ident.append(highestIndex)
+    newImportant = []
+    for k in range(0,len(arr)):
+        if(k not in ident):
+            newImportant.append(arr[k])
+    return newImportant
+
 
 
 
@@ -1034,7 +1183,7 @@ def loadANNData_3():
     goodCount2 = 0
     badCount2 = 0
     dronePos = None
-
+    minimals = []
     fileX = []
     fileY = []
     for index, i in enumerate(data["X"]):
@@ -1076,62 +1225,66 @@ def loadANNData_3():
             # The next value then will tell us how likely the error is
             # Those two values are going to be used by the machine along with the signal, to predict the error
             # Then the error is going to be added to the calcualted distance, giving a better result for the RSSI ~ Distance
-            print("\n")
-            print("LETS START")
-            print("This is the data before selection: ")
-            print(importantDs)
-            #input()
-            if(len(importantDs) < 3 or len(importantDs[0][3])== 0):
-                canCont = True
-            else:
-                canCont = False
-            while canCont == False:
-                print("Started again, mate!")
-                errorCalcs = []
-                newImportants = []
-                for important in importantDs:
-                    newImportant = error_calculation(important)
-                    errorCalcs.append(newImportant[1])
-                    newImportants.append(newImportant[0])
-                maximumError = -1
-                maximumErrorIndex = None
-                for maxEr in range(0, len(errorCalcs)):
-                    if(errorCalcs[maxEr] > maximumError):
-                        maximumError = errorCalcs[maxEr]
-                        maximumErrorIndex = maxEr
-                maxIndices = []
-                print("This is the error calculation! ", errorCalcs)
-                while(len(errorCalcs) != 3):
-                    maximumError2 = -1
-                    maximumErrorIndex2 = None
-                    for maxEr2 in range(0, len(errorCalcs)):
-                        if(errorCalcs[maxEr2] > maximumError2):
-                            maximumError2 = errorCalcs[maxEr2]
-                            maximumErrorIndex2 = maxEr2
-                    maxIndices.append(maximumErrorIndex2)
-                    errorCalcs.pop(maximumErrorIndex2)
-                print(newImportants)
-                #input()
-                if(len(newImportants) == 3):
-                    canCont = True
-                else:
-                    for toPop in maxIndices:
-                        print("This is ",toPop)
-                        popped = newImportants.pop(toPop)
-                        popped = popped[1]
-                    importantDs = newImportants
-                    #popped = newImportants.pop(maximumErrorIndex)
-                    #popped = popped[1]
-                    #print(popped)
-                    #importantDs = removeHighestError(newImportants, popped)
-            print("So this is going to be used for Trilateration: ")
-            '''
-                Gathering the data for a trilateration json ahhahaha
-            '''
             utmCord = utm.from_latlon(keptDronePos[0],keptDronePos[1])
             inside = pointToSection(utmCord[0], utmCord[1], sections)
-            print("The drone is:",inside)
-            if( inside != -1):
+            if(inside != -1):
+                print("\n")
+                print("This is the data before selection: ")
+                print(importantDs)
+                print("\n")
+                identified = []
+                if(len(importantDs) < 3 or len(importantDs[0][3])== 0):
+                    canCont = True
+                else:
+                    canCont = False
+                while canCont == False:
+                    #print("Started again, mate!")
+                    errorCalcs = []
+                    newImportants = []
+                    for important in importantDs:
+                        newImportant = error_calculation(important, identified)
+                        errorCalcs.append(newImportant[1])
+                        newImportants.append(newImportant[0])
+                    #print("\n")
+                    #print(newImportants)
+                    print(errorCalcs)
+                    #input()
+                    print("\n")
+                    if(len(newImportants) == 3):
+                        canCont = True
+                    else:
+
+                        newImportants, identified = removeHighestError(newImportants, errorCalcs, identified)
+                        #Remove the commenting to from the testLowest, to test what would be the value,
+                        #if we chose all the best values for trilateration, turns out the function is working, just
+                        #trilateriation is not that powerful haha.
+
+                        #newImportants = testLowest(newImportants)
+
+                        #print("\n")
+                        #print("This is new Importants! After removing the highest error!")
+                        #print(newImportants)
+                        #print(identified)
+                        #print("\n")
+                        #input()
+                        importantDs = newImportants
+                        #input()
+                        '''
+                        for toPop in maxIndices:
+                            print("This is ",toPop)
+                            popped = newImportants.pop(toPop)
+                            popped = popped[1]
+                        importantDs = newImportants
+                        '''
+                        #popped = newImportants.pop(maximumErrorIndex)
+                        #popped = popped[1]
+                        #print(popped)
+                        #importantDs = removeHighestError(newImportants, popped)
+                print("So this is going to be used for Trilateration: ")
+
+                '''
+                    Gathering the data for a trilateration json ahhahaha
+                '''
                 fileData = {}
                 for fileE in importantDs:
                     fileData[fileE[len(fileE)-1]] = fileE[0]
@@ -1144,10 +1297,8 @@ def loadANNData_3():
                 fileX.append(outerFileData)
                 fileY.append(keptDronePos)
                 print(importantDs)
-                #print(keptDronePos)
-                #print(outerFileData)
-                print("Good point")
-            input()
+                print("\n")
+                #input()
             #Decide if the idea is good or not here, batch data gathered
             maxi2 = 0
             mini2 = 10000000
@@ -1203,6 +1354,11 @@ def loadANNData_3():
     print(goodCount, badCount)
     print(goodCount2, badCount2)
     input()
+    print("\n")
+    print("\n")
+    for i in minimals:
+        print(i)
+        input()
 
     assert(len(fileX) == len(fileY))
     finalData = {}

@@ -30,11 +30,18 @@ def gps_solve(distsToNodes, nodeLocations):
     Another implementation to solve the multilateration.
     https://github.com/koru1130/multilateration
 '''
+
+'''
+    Function that the other type of multlateration uses.
+'''
 def residuals_fn(points, dist):
     def fn(location):
         return np.array( [ (dist(p, location).km - r)*(r*r) for (p, r) in points ] )
     return fn
 
+'''
+    Other tpye of multilateration, can remove commenting to use this.
+'''
 def multilateration(points, dist_type ='geodesic'):
     if dist_type == 'geodesic' :
         dist = distance.distance
@@ -217,6 +224,7 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
 
             '''
                 TESTING AREA FOR NEW FILTER
+                Works to an extent.
             '''
             '''
             nodeLocation = np.array([nodes[nodeId]["NodeUTMx"],nodes[nodeId]["NodeUTMy"]])
@@ -277,6 +285,7 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
         dist = np.linalg.norm(res-gt)
         '''
             TESTING AREA START
+            Works to an extent
         '''
         '''
         #print("Next")

@@ -285,7 +285,7 @@ def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
         if nodeDistErrorFreq[node][0]==0: continue
         print("\t{} had an average error of {}m".format(node, (nodeDistErrorFreq[node][0]/nodeDistErrorFreq[node][1])))
     print("Thus the function had a total overall average error of {} m".format((totalDistanceError[0]/totalDistanceError[1])))
-    
+
 def dataGridSections(month="June"):
     """ Check the frequency of the data from a given month in particular sectionsof the grid """
     # load in the varying values
@@ -342,6 +342,85 @@ def findAvgTrueError(verbose = False):
             print("{}, current error : {}, running average error : {}".format(i, dist, errors[0]/errors[1]))
     # show the average error
     print(errors[0]/errors[1])
+'''
+    Testing out the funcitonal model and then the sequential models in tensorflow, so I understand how to implement it in the end.
+    It will probably take 3 inputs -> distanceCalculated, errProb, errVal; 1 output -> predicted error
+    I'll use this as a sample later on.
+'''
+
+def FunctionalModel():
+    X, y = loadANNData_3()
+    #print(y)
+    y = np.array(y, dtype="float64")
+    print(y)
+    i1 = np.array(X,dtype="float64")
+    print(i1[0])
+    input()
+    #i2 = np.array(X[1], dtype="float64")
+    #print(i2[0])
+    #input()
+    #i3 = np.array(X[2], dtype=object)
+    #print(i3[0])
+    #input()
+
+    print(i1[0].shape)
+    print(i1.shape)
+    input()
+    print(i1)
+    print("\n")
+    input()
+    '''
+    for i in range(0,600):
+        print(i1[i].shape,i2[i].shape,i3[i].shape)
+    input()
+    '''
+    #print(X[0])
+    #input()
+    #input1 = Input(shape=(16,))
+    '''
+    input2 = Input(shape=(17,))
+    #input0 = Concatenate()([input1, input2])
+    x = Dense(2)(input2)
+    hidden1 = Dense(10,activation='relu')(x)
+    hidden2 = Dense(8,activation='relu')(hidden1)
+    hidden3 = Dense(6, activation='relu')(hidden2)
+    output = Dense(1,activation='relu')(hidden3)
+    model = Model(inputs=input2, outputs=output)
+    model.summary()
+    model.compile(
+        loss="mean_squared_error",
+        optimizer="adam",
+        metrics=["mean_absolute_error"]
+    )
+    '''
+    model = Sequential()
+    model.add(Dense(1, input_dim=1, activation="relu"))
+    model.add(Dense(1, activation="linear"))
+    opt = SGD(learning_rate=0.01,momentum=0.9)
+    model.compile(
+        loss="mean_squared_logarithmic_error",
+        optimizer=opt,
+        metrics=["mse"]
+
+    )
+    x_train, x_test, y_train, y_test = train_test_split(i1, y, train_size=0.8, random_state=101)
+    print(x_train)
+    print(y_train)
+    input()
+    #print(x1_train[0],x2_train[0], y_train[0])
+    #input()
+    history = model.fit(x_train, y_train, batch_size=64, epochs=100, validation_split=0.2)
+    test_scores = model.evaluate(x_test, y_test, verbose=2)
+    print("Test loss:", test_scores[0])
+    print("Test accuracy:", test_scores[1])
+    print(test_scores)
+    predicted = model.predict(x_test)
+
+    print(predicted)
+    print(y_test)
+    for i in range(0,len(y_test)):
+        print(predicted[i], "and",y_test[i], "and", x_test[i])
+        input()
 
 if __name__=="__main__":
     #closestNodeCount()

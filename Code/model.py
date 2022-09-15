@@ -6,7 +6,8 @@ https://github.com/dmlc/xgboost/blob/master/demo/guide-python/multioutput_regres
 import numpy as np
 from matplotlib import pyplot as plt
 import xgboost as xgb
-from utils import loadModelData, LoadMLPData, loadANNData, loadANNData_2, loadRSSModelData, loadCovariateData, loadSections, pointToSection, loadNodes
+from utils import loadModelData, loadRSSModelData, loadCovariateData, loadSections, pointToSection, loadNodes
+import proximity
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
@@ -210,7 +211,11 @@ def getClassificationMetrics(y_test, y_pred):
     # View the classification report for test data and predictions
     print(classification_report(y_test, y_pred))
 
+
 def MLPModel():
+    '''
+        Tried out the method proposed in a paper. But this is just plain bad. Can't even fith the data.
+    '''
     X, y = LoadMLPData()
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
     clf = MLPRegressor(hidden_layer_sizes=(8,10,8,8,6), max_iter=1000,activation='relu',solver='adam', random_state=1)
@@ -221,7 +226,11 @@ def MLPModel():
     clf.fit(X_train, y_train)
     #yPred = clf.predict(X_remaining)
 
-def ANNModel(save = False):
+def ANNDistanceModel(save = False):
+    '''
+        Wanted to try out whether an MLPRegressor would be able to find a better equation for the distance~RSSI.
+        The answer is no, but atleast I was able to try out this as well, for negative result finding etc.
+    '''
     X, y = loadANNData()
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
     clf= MLPRegressor(hidden_layer_sizes=(8,6,4), max_iter=10000,activation='relu',solver='adam', random_state=1)
@@ -249,4 +258,4 @@ def ANNModel(save = False):
 if __name__ == "__main__":
     rmseModel(useCovariate=True,isErrorData=False,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
     #MLPModel()
-    #ANNModel(save = False)
+    #ANNDistanceModel(save = False)

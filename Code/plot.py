@@ -17,7 +17,7 @@ def getSharpColors():
     """ List of nice colors for the habitat polygons on the map """
     return ["firebrick","darkgreen","blueviolet", "darkmagenta", "darkorange"]
 
-def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllData = False, sameNodeColor: bool = False):
+def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllData = False, sameNodeColor: bool = False, showText:bool = False):
     """ Function visualise the node locations and their relative distance to one another """
     # if we are going to save the node setup, this should be the relative file path
     filePath = "/plots/Nodes/NodeSetup.png"
@@ -26,7 +26,7 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
     habMap = HabitatMap()
     # plot variables
     fig = plt.figure()
-    fig.set_size_inches(32, 18)
+    #fig.set_size_inches(32, 18)
     ax = fig.add_subplot(111)
     
     # for each node key we want to have a different color
@@ -37,24 +37,28 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
     for idx in range(len(nodeKeys)):
         curX = nodes[nodeKeys[idx]]["NodeUTMx"]
         curY = nodes[nodeKeys[idx]]["NodeUTMy"]
-        ax.text(curX, curY-10, nodeKeys[idx], fontsize=10,fontweight='heavy')
-        # we can either have a random color for each node or have them all set to one
+        if showText:
+            ax.text(curX, curY-10, nodeKeys[idx], fontsize=10,fontweight='heavy')
+            # we can either have a random color for each node or have them all set to one
         if not sameNodeColor:
             ax.scatter(curX, curY, c=cmap(idx), marker='o')
         else:
             ax.scatter(curX, curY, c='magenta', marker='o')
 
+    
     # Now go through the grid and plot the relative distances between each node of form (i,j)
     for i in range(len(grid)):
         for j in range(len(grid[i])):
             # check if there is a value for dist to the right
             if j!=len(grid[j])-1 and grid[i][j][1]!=0:
                 ax.arrow(nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i][j][0]]["NodeUTMy"], nodes[grid[i][j+1][0]]["NodeUTMx"]-nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i][j+1][0]]["NodeUTMy"]-nodes[grid[i][j][0]]["NodeUTMy"], head_width=0.05, head_length=0.1, color="r", ls=':')       
-                ax.text((nodes[grid[i][j+1][0]]["NodeUTMx"]+nodes[grid[i][j][0]]["NodeUTMx"])/2, (nodes[grid[i][j+1][0]]["NodeUTMy"]+nodes[grid[i][j][0]]["NodeUTMy"])/2, grid[i][j][1], fontsize=10, c='b',fontweight='heavy')
+                if showText:
+                    ax.text((nodes[grid[i][j+1][0]]["NodeUTMx"]+nodes[grid[i][j][0]]["NodeUTMx"])/2, (nodes[grid[i][j+1][0]]["NodeUTMy"]+nodes[grid[i][j][0]]["NodeUTMy"])/2, grid[i][j][1], fontsize=10, c='b',fontweight='heavy')
             # check if there is a value for the dist to the top
             if i!=0 and grid[i][j][2]!=0:
                 ax.arrow(nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i][j][0]]["NodeUTMy"], nodes[grid[i-1][j][0]]["NodeUTMx"]-nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i-1][j][0]]["NodeUTMy"]-nodes[grid[i][j][0]]["NodeUTMy"], head_width=0.05, head_length=0.1, color="r", ls=':')       
-                ax.text((nodes[grid[i-1][j][0]]["NodeUTMx"]+nodes[grid[i][j][0]]["NodeUTMx"])/2, (nodes[grid[i-1][j][0]]["NodeUTMy"]+nodes[grid[i][j][0]]["NodeUTMy"])/2, grid[i][j][2], fontsize=10, c='b',fontweight='heavy')
+                if showText:
+                    ax.text((nodes[grid[i-1][j][0]]["NodeUTMx"]+nodes[grid[i][j][0]]["NodeUTMx"])/2, (nodes[grid[i-1][j][0]]["NodeUTMy"]+nodes[grid[i][j][0]]["NodeUTMy"])/2, grid[i][j][2], fontsize=10, c='b',fontweight='heavy')
     
     # if we're plotting the sections go through each and put the index in its center
     if plotSections:
@@ -77,11 +81,11 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
                 pts = np.array(habitatPointLists[idx])
                 p = MatplotPoly(pts, facecolor=habColors[hab_idx], alpha=.2, label=habitats[hab_idx]+"_"+str(idx))
                 ax.add_patch(p)
-        ax.legend(fontsize='small')
+        #ax.legend(fontsize='small')
 
     # add the axis labels and the title
-    plt.xlabel("UTMx")
-    plt.ylabel("UTMy")
+    #plt.xlabel("UTMx")
+    #plt.ylabel("UTMy")
     
     if not isAllData:
         plt.title("The setup of the Node Grid")
@@ -136,9 +140,9 @@ def plotGridWithPoints(data, isSections=True, plotHabitats=False, imposeLimits =
     # show the result
     plt.show()
 
-def plotAllData(month="June", isSections=True, plotHabitats=True, imposeLimits=True, combined=False, onlyOutside = False, sameNodeColor: bool = False):
+def plotAllData(month="June", isSections=False, plotHabitats=True, imposeLimits=True, combined=False, onlyOutside = False, sameNodeColor: bool = True):
     # load in a fig and ax with the node grid already displayed inplace
-    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True, sameNodeColor=sameNodeColor)
+    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True, sameNodeColor=sameNodeColor, showText=False)
     # set the file path based on month and whether we're including sections and whether 
     # only we're showing values outside the grid
     filePath = "/plots/"+month+"/Data"
@@ -179,7 +183,7 @@ def plotAllData(month="June", isSections=True, plotHabitats=True, imposeLimits=T
     if imposeLimits:
         plt.xlim((minX-50,maxX+50))
         plt.ylim((minY-50, maxY+50))
-    plt.savefig(os.getcwd()+filePath)
+    plt.savefig(os.getcwd()+filePath, bbox_inches='tight', pad_inches=0)
 
 def plotOriginal(month="March", threshold=-90):
     print("Plotting " + month + " with " + str(threshold) + " as a threshold")
@@ -290,11 +294,12 @@ def main(args=None):
     return None
 
 if __name__=="__main__":
-    parser = argparse.ArgumentParser(description='Plot variables')
+    plotAllData()
+    """parser = argparse.ArgumentParser(description='Plot variables')
     parser.add_argument('--equation', dest='eq', type=str,help="Do you want to plot the equation? y/n")
     parser.add_argument('--allData', dest='allData', type=str,help="Do you want to plot all the data? y/n")
     parser.add_argument('--month', dest='month', type=str, help='The month of the data you want to visualise')
     parser.add_argument('--rssi', dest='rssi', type=int, help='rssi filter for the data')
 
     args = parser.parse_args()
-    main(args)
+    main(args)"""

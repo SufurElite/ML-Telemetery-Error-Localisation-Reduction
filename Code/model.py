@@ -27,7 +27,7 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     """
     # Load in the data by the inputted boolean
     if isErrorData:
-        X, y = loadModelData(month="June",threshold=-101, verbose=False, includeCovariatePred=useCovariate)
+        X, y = loadModelData(month="October",threshold=-101, verbose=False, includeCovariatePred=useCovariate)
     else:
         X, y = loadRSSModelData(month="June",includeCovariatePred=True)
 
@@ -256,6 +256,6 @@ def ANNDistanceModel(save = False):
 
 
 if __name__ == "__main__":
-    rmseModel(useCovariate=True,isErrorData=False,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
+    rmseModel(useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
     #MLPModel()
     #ANNDistanceModel(save = False)

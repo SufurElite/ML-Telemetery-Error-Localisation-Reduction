@@ -39,6 +39,22 @@ def loadNodes(rewriteUTM=False):
         nodes[nodesData[i]["NodeId"]] = nodesData[i]
         del nodes[nodesData[i]["NodeId"]]["NodeId"]
     return nodes
+def loadNodes_46():
+    #Loading the data
+    df = pd.read_csv(r'../Data/October/nodes_coordinates.csv')
+    #Dictionary conversion
+    nodesData = df.to_dict('records')
+    nodes = {}
+    #Get the NodeIDs and the locations.
+    for i in range(len(nodesData)):
+        utmVals = utm.from_latlon(nodesData[i]["Latitude"], nodesData[i]["Longitude"])
+        nodes[nodesData[i]["NodeId"]] = {}
+        nodes[nodesData[i]["NodeId"]]["Latitude"] = nodesData[i]["Latitude"]
+        nodes[nodesData[i]["NodeId"]]["Longitude"] = nodesData[i]["Longitude"]
+        nodes[nodesData[i]["NodeId"]]["NodeUTMx"] = utmVals[0]
+        nodes[nodesData[i]["NodeId"]]["NodeUTMy"] = utmVals[1]
+    return nodes
+
 def distBetweenNodes(node1, node2, Nodes):
     """ Given 2 node ids and a dictionary of nodes this will calculate the distance between the two """
     node1Loc = np.array([np.float64(Nodes[node1]["NodeUTMx"]), np.float64(Nodes[node1]["NodeUTMy"])])
@@ -180,7 +196,9 @@ def loadData(month="March", pruned=False, combined = False):
     #Delete after usage.
     #Currently using another json, so we can test the function, that was written.
     if month == "June":
-        pathName = "../Data/"+month+"/trilatData.json"
+        pathName = "../Data/"+month+"/multilatFunctionData.json"
+    if month == "October":
+        pathName = "../Data/"+month+"/associatedTestData.json"
 
     #Don't want to ruin the other function just yet; so another parameter if we run the combined June-March prediction
     if combined == True:
@@ -353,8 +371,10 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
         covariateModel = loadCovariateModel()
     if month=="June":
         res = multilat.predictions(threshold,keepNodeIds=True,month="June")
-    else:
+    elif(month == "March"):
         res = multilat.predictions(threshold,keepNodeIds=True,month="March")
+    else:
+        res = multilat.predictions(threshold, keepNodeIds=True,month="October")
 
     rewriteUtm = False
     if month=="June":
@@ -417,7 +437,172 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
 
     return X, y
 
-def associateJuneData(newData = False):
+def associateOctoberData(newData=False):
+    nodeLocations = loadNodes_46()
+    #Load the September data
+    beepData = pd.read_csv(r'../Data/October/BeepData.csv')
+    #Sorting the values again, same as before
+    beepData.sort_values(by = ['TagId', 'Time.local'], axis=0, ascending=[False, True], inplace=True, ignore_index=True, key=None)
+
+    flightDF = pd.read_csv(r'../Data/October/drone_flights_edited.csv', index_col=None, header=0)
+    flightDF['ModifyDate'] = pd.to_datetime(flightDF['ModifyDate'], format="%Y:%m:%d %H:%M:%S")
+
+
+
+    # X will be composed of batches of data
+    X = []
+    # y will be composed of X items corresponding GT flight values
+    y = []
+    batch = {}
+    baseTime = '0'
+    tag = ''
+    errorDist = [0,0,0,0]
+    avgNums = [0,0]
+    missedTheCut = 0
+    missedthecutbadSort = 0
+    missedTheCutTooFew = 0
+    for index, row in enumerate(beepData.iterrows()):
+        #Converting it already
+        #print(row)
+        row[1]['Time.local'] = datetime.datetime.strptime(row[1]['Time.local'], "%Y-%m-%dT%H:%M:%SZ")
+        #print(row)
+        currDate = row[1]['Time.local']
+        #print(currDate)
+        #input()
+
+        if baseTime == '0':
+            batch = {}
+            baseTime = currDate
+            tag = row[1]['TagId']
+            #print(tag)
+            #input()
+        elif tag!=row[1]['TagId'] or (currDate-baseTime>datetime.timedelta(0,2)):
+            # Look for flight data th the same time
+            upperBound = baseTime+datetime.timedelta(0,2)
+            nBaseTime = baseTime - datetime.timedelta(hours=5)
+            nUpperBound = upperBound - datetime.timedelta(hours=5)
+
+
+            if(tag == '55783355'):
+                #testTime = '2022:10:04 11:46:00'
+                #testTime = datetime.datetime.strptime(testTime, "%Y:%m:%d %H:%M:%S")
+                #testTime2 = '2022:10:04 11:46:02'
+                #testTime2 = datetime.datetime.strptime(testTime2, "%Y:%m:%d %H:%M:%S")
+                #timeSort2 = flightDF[flightDF['ModifyDate'].between(testTime.strftime("%Y-%m-%d %H:%M:%S"),testTime2.strftime("%Y-%m-%d %H:%M:%S"))]
+                #print("THIS IS IT:")
+                #print(timeSort2)
+                #tag2 = '33662A55'
+                #tagSort2 = timeSort2[timeSort2['tag_id'].str.contains(tag2)]
+                #print(tagSort2)
+                #print(tag)
+                print(baseTime)
+                print(upperBound)
+                print(tag)
+                #input()
+            #print(baseTime,currDate)
+            #print(flightDF['ModifyDate'])
+
+            timeSort = flightDF[flightDF['ModifyDate'].between(nBaseTime.strftime("%Y-%m-%d %H:%M:%S"),nUpperBound.strftime("%Y-%m-%d %H:%M:%S"))]
+
+            # then sort the above timeSorted data by the relevant test tag id
+            tagSort = timeSort[timeSort['tag_id'].str.contains(tag)]
+            #if(len(tagSort) != 0):
+                #print(tagSort)
+
+
+
+            if len(batch.keys())>=3 and len(tagSort)!=0:
+                data = {}
+
+                data["time"] = baseTime.strftime("%Y-%m-%dT%H:%M:%SZ")
+                data["tag"] = tag
+                data["data"]={}
+                rowVals = 0
+                print(batch)
+                #input()
+                for i in batch.keys():
+                    # average the tag-Node RSSi value
+                    if newData == True:
+                        data["data"][i] = batch[i]
+                    else:
+                        data["data"][i] = batch[i][1]/batch[i][0]
+                    rowVals+=batch[i][0]
+                print(data["data"])
+                X.append(data)
+                if newData == True:
+                    avgAlt = tagSort["AbsoluteAltitude"].mean()
+                # get the average latitude over the 2 seconds
+                avgLat = tagSort["GPSLatitude"].mean()
+                # get the average longitude over the 2 seconds
+                avgLong = tagSort["GPSLongitude"].mean()
+
+                #If newData is true; then we add the altitude as well
+                if newData == True:
+                    y.append([avgLat,avgLong,avgAlt])
+                else:
+                    y.append([avgLat,avgLong])
+
+                avgNums[0]+=1
+                avgNums[1]+=rowVals
+            else:
+                if tag=="5552664C":
+                    errorDist[0]+=1
+                elif index<16518:
+                    errorDist[1]+=1
+                elif index<21253:
+                    errorDist[2]+=1
+                else:
+                    errorDist[3]+=1
+                if(len(batch.keys())<3):
+                    missedTheCutTooFew+=1
+                elif len(tagSort)==0:
+                    missedthecutbadSort+=1
+                missedTheCut+=len(batch.keys())
+            # Reset the variables
+            batch = {}
+            baseTime = currDate
+            tag = row[1]['TagId']
+        #If the newData is true; then gather different info
+        if  newData == True:
+            if row[1]['NodeId'] not in batch.keys():
+                batch[row[1]['NodeId']]=[0,0,[]]
+                batch[row[1]['NodeId']][0] +=1
+                name = row[1]['NodeId']
+                batch[row[1]['NodeId']][1] = [nodeLocations[name]['Latitude'],nodeLocations[name]['Longitude']]
+                batch[row[1]['NodeId']][2].append(row[1]['TagRSSI'])
+            elif row[1]['NodeId'] in batch.keys():
+                batch[row[1]['NodeId']][0] +=1
+                batch[row[1]['NodeId']][2].append(row[1]['TagRSSI'])
+        #Otherwise, gather the same information
+        else:
+            #print(batch.keys())
+            #input()
+            if row[1]['NodeId'] not in batch.keys():
+                batch[row[1]['NodeId']]=[0,0]
+            batch[row[1]['NodeId']][0]+=1
+            batch[row[1]['NodeId']][1]+=row[1]['TagRSSI']
+            #print("++++++++")
+            #print(batch)
+            #input()
+    # every x should have a corresponding y
+    assert(len(X)==len(y))
+    finalData = {}
+    finalData['X']=X
+    finalData['y']=y
+    if(newData == True):
+        with open("../Data/September/newDataOct.json","w+") as f:
+            json.dump(finalData, f)
+    else:
+        with open("../Data/September/associatedTestData.json","w+") as f:
+            json.dump(finalData, f)
+    print(missedTheCut,missedTheCutTooFew,missedthecutbadSort)
+    print(errorDist)
+    print("There were {} rows,\nof which there were {} 2 second intervals/batches with relevant data,\naveraging {} rows a batch".format(len(beepData),avgNums[0],(avgNums[1]/avgNums[0])))
+
+
+
+
+def associateJuneData(newData = False, newGrid = False):
     """ This function currently only works for June but ideally will be refactored with the March function.
         It associates the TestIds and its data with the rows
 
@@ -426,8 +611,8 @@ def associateJuneData(newData = False):
         """
 
     if(newData == True):
-        #print("Running the new data!")
         nodeLocations = loadNodes(rewriteUTM=True)
+
     # Load the June BeepData in
     beepData = pd.read_csv(r'../Data/June/BeepData.csv')
     # sort the data by tag and time, so that as we increment we can group them together in ~2 second intervals
@@ -445,6 +630,7 @@ def associateJuneData(newData = False):
 
     flightDF = pd.concat(flightDataList, axis=0, ignore_index=True)
     flightDF['datetime(utc)'] = pd.to_datetime(flightDF['datetime(utc)'])
+
     """
     General idea:
         The beep data (input values) are sorted by tag and by time, so increasing over them should
@@ -485,6 +671,7 @@ def associateJuneData(newData = False):
             timeSort = flightDF[flightDF['datetime(utc)'].between(baseTime.strftime("%Y-%m-%d %H:%M:%S"),upperBound.strftime("%Y-%m-%d %H:%M:%S"))]
             # then sort the above timeSorted data by the relevant test tag id
             tagSort = timeSort[timeSort['TagId'].str.contains(tag)]
+
 
 
             if len(batch.keys())>=3 and len(tagSort)!=0:
@@ -950,4 +1137,7 @@ def calculateDist(RSSI):
 
 if __name__=="__main__":
     #associateJuneData(newData=True)
-    print(multilat.predictions(rssiThreshold=-102,keepNodeIds=True, isTriLat = False, month="June"))
+    #print(multilat.predictions(rssiThreshold=-102,keepNodeIds=True, isTriLat = False, month="June"))
+    #loadNodes()
+    #loadNodes_46()
+    associateOctoberData()

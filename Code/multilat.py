@@ -188,6 +188,9 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
         #Load March - new JSON
         data = utils.loadData(month="March",combined=True)
         nodes = utils.loadNodes(rewriteUTM=False)
+    if(month == "October"):
+        data = utils.loadData(month="October", combined=True)
+        nodes = utils.loadNodes_46()
     # assign the relevant variables
     X = data["X"]
     y = data["y"]
@@ -219,7 +222,8 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
                 continue
 
             distToNodes.append(utils.calculateDist_2(X[idx]["data"][nodeId]))
-            if dataEntry=="3288000000": nodeId="3288e6"
+            if(month != 'October'):
+                if dataEntry=="3288000000": nodeId="3288e6"
             nodeLocs.append([nodes[nodeId]["NodeUTMx"],nodes[nodeId]["NodeUTMy"]])
 
             '''

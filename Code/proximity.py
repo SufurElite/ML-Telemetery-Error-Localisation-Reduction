@@ -193,6 +193,8 @@ def error_calculation(arr, identified):
     numerator = 0
     endPercent = 50
     errorDistances = []
+
+    errorVal = []
     for i in range(0,len(currOtherSig)):
         compare = currOtherDistS[i]
         val0 = currDistS * 1.0
@@ -203,7 +205,8 @@ def error_calculation(arr, identified):
         print("\n")
         print(i,". Run")
         print("#################################")
-
+        diff = currOtherSig[i]-currSig
+        addErr = 0
         for j in range(0,endPercent):
             if(val0 *(1+(j/100)) < compare):
                 val1 = val0 *(1+((j+1)/100))
@@ -223,11 +226,14 @@ def error_calculation(arr, identified):
 
 
             if(val0 < compare):
+                dissonant = True
                 if(insideIdentified_2(identified, compare) == False):
                     addNum = (0.1*(percent)/endPercent)
                     numerator += addNum
                     print("Possible dissonance")
                     print(val0, " is less than ", compare, "so we add", addNum)
+                    print("Difference between signals is:", diff)
+                    addErr = diff*(percent)/endPercent
                 else:
                     print("Possible dissonance, but ")
                     print("Inside the identified error signals")
@@ -235,7 +241,11 @@ def error_calculation(arr, identified):
                     numerator += addNum
                     print(val0, "is less than", compare, "but", currOtherSig[i], "is in identified error signals")
                     print("So we add", addNum)
+                    print("Difference between signals is:", diff)
+                    addErr = diff*(endPercent-percent)/endPercent
+
             else:
+                dissonant = False
                 addNum = (0.05*(endPercent-percent2)/endPercent)
                 numerator += addNum
                 print("Good for first")
@@ -253,11 +263,14 @@ def error_calculation(arr, identified):
 
 
             if(val0 > compare):
+                dissonant = True
                 if(insideIdentified_2(identified, compare) == False):
                     addNum = (0.1*(percent2)/endPercent)
                     numerator += addNum
                     print("Possible dissonance")
                     print(val0, " is bigger than ", compare, "so we add", addNum)
+                    print("Difference between signals is:", diff)
+                    addErr = diff*(percent2)/endPercent
                 else:
                     print("Possible dissonance, but ")
                     print("Inside the identified error signals")
@@ -265,7 +278,11 @@ def error_calculation(arr, identified):
                     numerator += addNum
                     print(val0, "is bigger than", compare, "but", currOtherSig[i], "is in identified error signals")
                     print("So we add", addNum)
+                    print("Difference between signals is:", diff)
+                    addErr = diff*(endPercent-percent2)/endPercent
+
             else:
+                dissonant = False
                 addNum = (0.05 *(endPercent-percent)/endPercent)
                 numerator += addNum
 
@@ -280,22 +297,26 @@ def error_calculation(arr, identified):
             print(val1, compare, percent)
             print(val2, compare, percent2)
             print("\n")
-
+            dissonant = False
             if(insideIdentified_2(identified, compare) == False):
                 if(val0 > compare):
                     addNum = (0.1*(percent2)/endPercent)
+                    addErr = 1*(percent2)/endPercent
                     numerator += addNum
                 else:
                     addNum = (0.1 *(percent)/endPercent)
+                    addErr = 1*(percent)/endPercent
                     numerator += addNum
             else:
                 if(val0 > compare):
                     addNum = (0.05*(percent2)/endPercent)
+                    addErr = 1*(percent2)/endPercent
                     numerator += addNum
                 else:
                     addNum = (0.05*(percent)/endPercent)
+                    addErr = 1*(percent2)/endPercent
                     numerator += addNum
-
+        errorVal.append([addErr,currOtherSig[i],dissonant])
         #input()
         print("#################################")
         print("\n")
@@ -330,7 +351,7 @@ def error_calculation(arr, identified):
     #print(errorDistances)
     #print(round(numerator/size*100,2), "%")
 
-    return [arr, round(numerator/size*100,2)]
+    return [arr, round(numerator/size*100,2), errorVal]
 
 def removeHighestError(arr, arr2, identified):
     '''
@@ -347,6 +368,7 @@ def removeHighestError(arr, arr2, identified):
         Then they are going to be passed to the function, for so it adds those 3 signals with the neccesary NodeIDs
         for later trilateriation.
     '''
+    arrCopy = arr.copy()
     arr2_sorted = sorted(arr2)
     print("\n")
     print("removeErrorFunction")
@@ -369,7 +391,7 @@ def removeHighestError(arr, arr2, identified):
         print(arr2)
         print(identified)
         print("\n")
-        return arr, identified
+        return arr, identified, arrCopy
     elif(len(arr) - len(identified) == 3):
         print("\n")
         print(arr)
@@ -378,7 +400,7 @@ def removeHighestError(arr, arr2, identified):
         for ident in identified:
             arr.remove(ident[0])
 
-        return arr, identified
+        return arr, identified, arrCopy
     else:
         inside = []
         outside = []
@@ -420,9 +442,8 @@ def removeHighestError(arr, arr2, identified):
         print(arr2)
         print(identified)
         print("\n")
-        return arr, identified
+        return arr, identified, arrCopy
 
-    #input()
 
 
 def deviation(arr, value):
@@ -495,8 +516,221 @@ def testLowest(arr):
             newImportant.append(arr[k])
     return newImportant
 
+def optimizeSignal(arr, arr2, arr3, arr4):
+    '''
+        This funciton is going to change the identified error signals' signal and then a new signal is going to be passed,
+        to the data gathering, which will be a more accurate, optimized signal of the signals. Then, multilateration is
+        going to be applied. Eventually it should increase the accuracy, hopefully this gets it below 50metres.
 
-def loadANNData_2():
+        arr structure:
+            All the signal data in the current batch
+        arr2 structure:
+            Data on whether a signal is dissonant, if so what is the difference for each of them etc.
+            [[sigDiff*probability, signalThatIsDissonantTo, DissonantOrNotBool],...]
+        arr3 structure:
+            Identified signals, that are going to be changed for better multilateration.
+    '''
+    print("%%% Optimize Signal %%%")
+    #input()
+    print(arr)
+    print(arr2)
+    print(arr3)
+    currReplace = arr3[len(arr3)-1][0]
+    print("\n")
+    print("This is currReplace:")
+    print(currReplace)
+    #input()
+    for signalI in range(0,len(arr)):
+        if(arr[signalI] == currReplace):
+            errIndex = signalI
+    print("##############")
+    analyseResult = arr2[errIndex]
+    #Now we will try to optimize the signal, so we get
+    #the lowest possible dissonances.
+    currSig = currReplace[0]
+    maxi = -1
+    for i in analyseResult:
+        if(maxi < abs(i[0])):
+            maxi = i[0]
+    maxi = int(round(maxi,0))
+    if(maxi > 5):
+        maxi = 5
+    print(maxi)
+    possibleChange = [0]
+    for number in range(1,maxi+1):
+        possibleChange.append(number)
+        possibleChange.append(-number)
+    print(possibleChange)
+    evaluateChanges = []
+    for change in possibleChange:
+        changeSig = currSig + change
+        good = 0
+        bad = 0
+        index = 0
+        for otherSig in analyseResult:
+            #Try to compare the results, how it is changed, how many good / bad you have
+            print(otherSig)
+            if(otherSig[2] == False):
+                if(currSig > otherSig[1]):
+                    if(changeSig >= otherSig[1]):
+                        good += 1
+                    else:
+                        bad += 1
+                elif(currSig < otherSig[1]):
+                    if(changeSig <= otherSig[1]):
+                        good += 1
+                    else:
+                        bad += 1
+                else:
+                    dist1 = currReplace[1]
+                    dist2 = findDistance(arr, currReplace, index)
+                    dists = [dist1,dist2]
+                    signs = [changeSig,otherSig[1]]
+                    if(signalFit(dists, signs) == True):
+                        good += 1
+                    else:
+                        bad += 1
+            else:
+                if(currSig > otherSig[1]):
+                    if(changeSig > otherSig[1]):
+                        bad += 1
+                    else:
+                        good += 1
+                elif(currSig < otherSig[1]):
+                    if(changeSig < otherSig[1]):
+                        bad += 1
+                    else:
+                        good += 1
+                else:
+                    dist1 = currReplace[1]
+                    dist2 = findDistance(arr, currReplace, index)
+                    dists = [dist1,dist2]
+                    signs = [changeSig,otherSig[1]]
+                    if(signalFit(dists, signs) == True):
+                        good += 1
+                    else:
+                        bad += 1
+            index += 1
+        evaluateChanges.append([good-bad, changeSig])
+        #print(good, bad, changeSig)
+    print("Change Signals!")
+    print(evaluateChanges)
+    #input()
+    '''
+        Now, choose the one that has the best 'good' - then replace the signal with that.
+        So, now we have an optimised signal. We will be able to use this for multilateration.
+    '''
+    maxi2 = -1000
+    for ev in range(0,len(evaluateChanges)):
+        if(maxi2 < evaluateChanges[ev][0]):
+            maxi2 = evaluateChanges[ev][0]
+    print("Maxi!!!")
+    print(maxi2)
+    #input()
+    reducedChanges = []
+    for ev2 in range(0,len(evaluateChanges)):
+        if(evaluateChanges[ev2][0] == maxi2):
+            reducedChanges.append(evaluateChanges[ev2])
+    print("Reduced changes!!")
+    print(reducedChanges)
+    #input()
+    if(len(reducedChanges) == 1):
+        optimisedSig = reducedChanges[0][1]
+        currReplace[0] = optimisedSig
+        arr4.append(currReplace)
+    else:
+        print("#########REDUCED CHANGES#########")
+        print(reducedChanges)
+        optimisedSig = findOptimisedSignal(reducedChanges, currSig)
+        currReplace[0] = optimisedSig
+        arr4.append(currReplace)
+        print("#########REDUCED CHANGES#########")
+        #input()
+    print(analyseResult)
+    print(currReplace)
+    #input()
+
+    return arr4
+
+def findOptimisedSignal(arr, ogSign):
+    lower = 0
+    higher = 0
+    lowerData = []
+    higherData = []
+    for i in range(0,len(arr)):
+        if(ogSign > arr[i][1]):
+            lower += 1
+            lowerData.append(arr[i])
+        if(ogSign < arr[i][1]):
+            higher += 1
+            higherData.append(arr[i])
+    if(len(higherData) == 0):
+        total = 0
+        for j in lowerData:
+            total += j[1]
+        mean = round(total/len(lowerData),2)
+    elif(len(lowerData) == 0):
+        total = 0
+        for j in higherData:
+            total += j[1]
+        mean = round(total/len(higherData),2)
+    else:
+        if(higher > lower):
+            total = 0
+            for j in lowerData:
+                total += j[1]
+            mean = round(total/len(lowerData),2)
+        else:
+            total = 0
+            for j in higherData:
+                total += j[1]
+            mean = round(total/len(higherData),2)
+    if(mean < -101):
+        mean = -101
+    if(mean > -73):
+        mean = -73
+    return mean
+
+
+
+def signalFit(arr, arr2):
+    '''
+        Checks whether the signals follow the rule or not.
+        sig1 > sig2
+        dist1 < dist 2
+    '''
+    sig1 = arr2[0]
+    sig2 = arr2[1]
+    dist1 = arr[0]
+    dist2 = arr[1]
+    if(sig1 > sig2):
+        if(dist1 < dist2):
+            return True
+        else:
+            return False
+    else:
+        if(dist1 > dist2):
+            return True
+        else:
+            return False
+
+def findDistance(arr, itemSkip ,count):
+    '''
+        Finds the corresponding distances when the optimisation encounters signals that are the same.
+        So, we can apply a different optimisation.
+    '''
+    count2 = 0
+    distance = None
+    for i in range(0,len(arr)):
+        if(arr[i] == itemSkip): continue
+        if(count2 == count):
+            distance = arr[i][1]
+        count2 += 1
+    return distance
+
+
+
+def loadANNData_2(isTrilat=False):
     '''
         Idea here would be gather the signal and then the calculated distance, then get what the error is
         then train the signal and the error on the model. Model would try to predict the error that is
@@ -585,7 +819,16 @@ def loadANNData_2():
             #Get coordinates of the drone, if inside the grid then do the calcualtion otherwise skip for now
             utmCord = utm.from_latlon(keptDronePos[0],keptDronePos[1])
             inside = utils.pointToSection(utmCord[0], utmCord[1], sections)
-
+            '''
+                Idea for error calculation // signal re-calculation. We will re-calculate all signals except for 3.
+                So, we basically will make use of the trilateration - rewrite all signals except for those that have
+                the highest accuracy according to the function.
+                Then we can do two things. Either do multilateration with the all data (including the 3 signals
+                that were not change) or do multilateration with the signals excluding the 3 signals taht were not
+                changed.
+                This comes down to two ideas. If we rewrite a finite amount of signals, we can increase the accuracy,
+                by what extent is yet to be discovered.
+            '''
 
             if(inside != -1):
                 print("\n")
@@ -593,11 +836,13 @@ def loadANNData_2():
                 print(importantDs)
                 print("\n")
                 identified = []
+                optIdentified = []
                 #While loop that will run the error_calculations again and again, till
                 #3 singals are identified by the removeHighestError and the error_calculation funcitons
                 canCont = False
                 while canCont == False:
                     errorCalcs = []
+                    errorVals = []
                     newImportants = []
                     #Calculates all the errors for all the signals in the batch, then adds them to a list
                     #errorCalcs -> errorProbabilites for the signals
@@ -608,11 +853,15 @@ def loadANNData_2():
                         newImportant = error_calculation(important, identified)
                         errorCalcs.append(newImportant[1])
                         newImportants.append(newImportant[0])
+                        errorVals.append(newImportant[2])
+                    print("%%%%%%%%%%%%%%%%%%%%%%%%%")
+                    print(errorVals)
                     print(errorCalcs)
+                    print("%%%%%%%%%%%%%%%%%%%%%%%%%")
                     #input()
                     print("\n")
-                    newImportants, identified = removeHighestError(newImportants, errorCalcs, identified)
-
+                    newImportants, identified, newImportantsCopy = removeHighestError(newImportants, errorCalcs, identified)
+                    optIdentified = optimizeSignal(newImportantsCopy, errorVals, identified, optIdentified)
                     #Remove the commenting to from the testLowest, to test what would be the value,
                     #if we chose all the best values for trilateration, turns out the function is working, just
                     #trilateriation is not that powerful haha.
@@ -627,6 +876,10 @@ def loadANNData_2():
                 '''
                     Gathering the data for a trilateration json ahhahaha
                 '''
+                if(isTrilat == False):
+                    for optSig in optIdentified:
+                        importantDs.append(optSig)
+                
                 fileData = {}
                 for fileE in importantDs:
                     fileData[fileE[len(fileE)-1]] = fileE[0]
@@ -667,9 +920,12 @@ def loadANNData_2():
     finalData = {}
     finalData['X']=fileX
     finalData['y']=fileY
-
-    #Save the file in a json, that will be used for modelling / training
-    with open("../Data/"+month+"/trilatData.json","w+") as f:
+    if(isTrilat == False):
+        with open("../Data/"+month+"/multilatFunctionData.json","w+") as f:
+                json.dump(finalData, f)
+    else:
+        #Save the file in a json, that will be used for modelling / training
+        with open("../Data/"+month+"/trilatData.json","w+") as f:
             json.dump(finalData, f)
 
 def LoadMLPData(month="June"):

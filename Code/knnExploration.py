@@ -13,7 +13,7 @@ def maxDist(arr):
             idx = i
     return idx
 
-def knn(X_train, x_example, y_example = [], y_train = [], nodeLocs = [], k:int = 3, j: int = -1):
+def knn(X_train, x_example, y_example = [], y_train = [], nodeLocs = [], k:int = 3, j: int = -1, takeAvg: bool = True):
     """ Find the indices of the smallest k signal distances between the
         x_example and X_train, return them accordingly. 
         If y_test and y_example are present, similarly populate them with 
@@ -70,25 +70,49 @@ def knn(X_train, x_example, y_example = [], y_train = [], nodeLocs = [], k:int =
             currYMax = y_closest[currYMaxIdx][0]
             #print(y_closest)
             #input()
-    print(smallestIndices)
-    print(y_closest)
-    simpleAverage = [0,0]
+    #print(smallestIndices)
+    #print(y_closest)
+    averagedLoc = [0,0]
+    
+    minDist = smallestIndices[0][0]
+    if not takeAvg:
+        for i in range(1,k):
+            minDist = min(smallestIndices[i][0], minDist)
+    
+    proportionSums = 0
     for i in range(k):
         tmp_y_loc = gps_solve(y_train[smallestIndices[i][2]], np.array(list(nodeLocs)))
-        simpleAverage[0]+=tmp_y_loc[0]
-        simpleAverage[1]+=tmp_y_loc[1]
-    simpleAverage[0]/=k
-    simpleAverage[1]/=k
-    simp_loc = np.array(simpleAverage)
-    print(simpleAverage)
-    print(y_example)
-    error_dist = np.linalg.norm(y_loc-simp_loc)
-    print(error_dist)
+        if takeAvg:
+            averagedLoc[0]+=tmp_y_loc[0]
+            averagedLoc[1]+=tmp_y_loc[1]
+        else:
+            # make the weighted average proporitional to the maximum signal
+            
+            averagedLoc[0]+=tmp_y_loc[0]*(minDist/smallestIndices[i][0])
+            averagedLoc[1]+=tmp_y_loc[1]*(minDist/smallestIndices[i][0])
+            # need  a more clever way than to divide by k again as that will give erroneous results
+    
+    averagedLoc[0]/=k
+    averagedLoc[1]/=k
+    
+    #print(averagedLoc)
+    loc = np.array(averagedLoc)
+    #print(averagedLoc)
+    #print(y_example)
+    error_dist = np.linalg.norm(y_loc-loc)
+    #print(error_dist)
     return error_dist
     
 
 def kValueExplored(X_train, X_test, y_train, y_test,k:int = 3):
-    pass
+    result = ""
+    for i in range(k):
+        error = specificRSSkNN(X_train, X_test, y_train, y_test, k=i+1)
+        result+="The kNN total error using averaged locations for {} k value was {}\n".format(i+1,error)
+    print(result)
+    with open("knnInitialResults","w+") as f:
+        f.write(result)
+            
 
 def specificRSSkNN(X_train, X_test, y_train, y_test, k:int = 3):
     # want to load in the section nodes
@@ -100,11 +124,12 @@ def specificRSSkNN(X_train, X_test, y_train, y_test, k:int = 3):
         nodeLocs.append([nodes[node]["NodeUTMx"],nodes[node]["NodeUTMy"]])
     err = 0 
     for i in range(len(X_test)):
-        err+=knn(X_train=X_train,x_example=X_test[i], y_example=y_test[i], y_train=y_train, nodeLocs = nodeLocs, j = i)
+        err+=knn(X_train=X_train,x_example=X_test[i], y_example=y_test[i], y_train=y_train, nodeLocs = nodeLocs, j = i, takeAvg=False)
     err/=len(X_test)
     print("Total test error : {}".format(err))
     # now iterate over the x_test to find the k-closest values
-    pass
+    return err
+
 
 def main(knnExploration:bool = False, isSample:bool = False):
 
@@ -116,10 +141,10 @@ def main(knnExploration:bool = False, isSample:bool = False):
     X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, random_state=101)
 
     if knnExploration:
-        kValueExplored()
+        kValueExplored(X_train, X_test, y_train, y_test, k=6)
     else:
         specificRSSkNN(X_train, X_test, y_train, y_test)
     
 
 if __name__=="__main__":
-    main()
+    main(knnExploration=True)

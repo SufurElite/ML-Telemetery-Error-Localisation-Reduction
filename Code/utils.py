@@ -21,6 +21,7 @@ from keras.utils import plot_model
 from tensorflow import keras
 from sklearn.model_selection import train_test_split
 import random
+import csv
 
 def loadNodes(rewriteUTM=False):
     """ Loads in the nodes from the CSV and returns it as a dictionary where the key is its NodeId"""
@@ -55,14 +56,85 @@ def loadNodes_46():
         nodes[nodesData[i]["NodeId"]]["NodeUTMy"] = utmVals[1]
     return nodes
 
+def newNodes_tocsv():
+
+    nodes = loadNodes_46()
+    for node in nodes.keys():
+        nodes[node]['Id'] = node
+    with open ('newNodes.csv', 'w', newline='') as f:
+        fnames = nodes['3290ef'].keys()
+        writer = csv.DictWriter(f, fieldnames =fnames)
+        writer.writeheader()
+        for node in nodes.keys():
+            writer.writerow(nodes[node])
+
 def distBetweenNodes(node1, node2, Nodes):
     """ Given 2 node ids and a dictionary of nodes this will calculate the distance between the two """
     node1Loc = np.array([np.float64(Nodes[node1]["NodeUTMx"]), np.float64(Nodes[node1]["NodeUTMy"])])
     node2Loc = np.array([np.float64(Nodes[node2]["NodeUTMx"]),np.float64(Nodes[node2]["NodeUTMy"])])
     dist = np.linalg.norm(node1Loc-node2Loc)
     return dist
-
 def loadSections():
+    ''' New grid sections, same thing as for loadSections just a few modifications
+            -Not a perfect square
+            -More nodes
+    '''
+    nodes = loadNodes_46()
+    #Saying that it is a perfect square, so 49 nodes.
+    length = 7
+    # the number of sections is (length-1)^2
+    sections = {}
+    #These nodes are non existent.
+    skip = [0, 7, 14]
+    for i in range((length-1)**2):
+        # the first 0,0 is the X min max,
+        # the second 0,0 is the Y min max
+        if i in skip: continue
+        sections[i] = [(0,0),(0,0)]
+    grid = [[["imaginary3",0,0],["37ab1a",0,0],["377747",0,0],["375d74",0,0],["37a447",0,0],["37714f",0,0],["3769cc",0,0]],
+            [["imaginary2",0,0],["375f25",0,0],["37a144",0,0],["3785ce",0,0],["37a7f9",0,0],["377147",0,0],["377ae4",0,0]],
+            [["imaginary1",0,0],["378a6d",0,0],["37930f",0,0],["3798b0",0,0],["37a807",0,0],["376ced",0,0],["378579",0,0]],
+            [["3290ef",0,0],["37a200",0,0],["377bc2",0,0],["37917d",0,0],["376141",0,0],["3762cf",0,0],["37ab20",0,0]],
+            [["37a5e9",0,0],["376095",0,0],["3275dd",0,0],["328b9b",0,0],["377483",0,0],["37a114",0,0],["37840a",0,0]],
+            [["3775bf",0,0],["37774c",0,0],["3774a7",0,0],["379611",0,0],["3783b7",0,0],["376f25",0,0],["376eca",0,0]],
+            [["3288e6",0,0],["328840",0,0],["377905",0,0],["32820a",0,0],["376e5f",0,0],["375f15",0,0],["377256",0,0]]]
+    for i in range(len(grid)):
+        for j in range(len(grid[i])):
+            # get the current node id
+            if grid[i][j] == None: continue
+            curNode = grid[i][j][0]
+            distRight = 0
+            distAbove = 0
+            # if we're not at the edges, get the distance to the right and above
+            if j!=len(grid[j])-1:
+                nodeRight = grid[i][j+1][0]
+                distRight = distBetweenNodes(curNode, nodeRight, nodes)
+            if i!=0:
+                nodeAbove = grid[i-1][j][0]
+                distAbove = distBetweenNodes(curNode, nodeAbove, nodes)
+            grid[i][j][1] = distRight
+            grid[i][j][2] = distAbove
+    # go through every 'section' in the grid and find the bounds for the sections
+    for i in range(length-1):
+        for j in range(length-1):
+            # initialize the minimum and maximum values and then
+            # just take the min and max for each the nodes to the right and below
+            minX = nodes[grid[i][j][0]]["NodeUTMx"]
+            minY = nodes[grid[i+1][j][0]]["NodeUTMy"]
+
+            maxX = nodes[grid[i][j+1][0]]["NodeUTMx"]
+            maxY = nodes[grid[i][j][0]]["NodeUTMy"]
+            # compare the values to the only other smallest/largest on the same level
+            minX = min(minX,nodes[grid[i+1][j][0]]["NodeUTMx"])
+            minY = min(minY,nodes[grid[i+1][j+1][0]]["NodeUTMy"])
+            maxX = max(maxX,nodes[grid[i+1][j+1][0]]["NodeUTMx"])
+            maxY = max(maxY,nodes[grid[i][j+1][0]]["NodeUTMy"])
+
+            sections[i*3+j] = [(minX,minY),(maxX, maxY)]
+
+    return grid, sections, nodes
+
+def loadSections_Old():
     """ Will create a dictionary of section # to coordinates of
         each square formed within the grid """
 
@@ -160,6 +232,23 @@ def convertOldUtm(oldUTMx,oldUTMy, oldNodes=[], newNodes=[]):
     # to a new one
     newUTMx,newUTMy = multilat.gps_solve(oldNodeDists, list(np.array(newNodeLocs)))
     return newUTMx,newUTMy
+def loadBoundaries_46():
+    """ New grid poundaries """
+    nodes = loadNodes_46()
+    minX = nodes[list(nodes.keys())[0]]["NodeUTMx"]
+    maxX = nodes[list(nodes.keys())[0]]["NodeUTMx"]
+    minY = nodes[list(nodes.keys())[0]]["NodeUTMy"]
+    maxY = nodes[list(nodes.keys())[0]]["NodeUTMy"]
+    for node in nodes.keys():
+        if nodes[node]["NodeUTMx"]>maxX:
+            maxX = nodes[node]["NodeUTMx"]
+        if nodes[node]["NodeUTMx"]<minX:
+            minX = nodes[node]["NodeUTMx"]
+        if nodes[node]["NodeUTMy"]>maxY:
+            maxY = nodes[node]["NodeUTMy"]
+        if nodes[node]["NodeUTMy"]<minY:
+            minY = nodes[node]["NodeUTMy"]
+    return minX,maxX,minY,maxY
 
 def loadBoundaries(redoUtm=False):
     """ Will return the boundaries of the node system """
@@ -568,6 +657,7 @@ def associateOctoberData(newData=False):
                 batch[row[1]['NodeId']]=[0,0,[]]
                 batch[row[1]['NodeId']][0] +=1
                 name = row[1]['NodeId']
+                if name == '3288e6': name = '3288000000'
                 batch[row[1]['NodeId']][1] = [nodeLocations[name]['Latitude'],nodeLocations[name]['Longitude']]
                 batch[row[1]['NodeId']][2].append(row[1]['TagRSSI'])
             elif row[1]['NodeId'] in batch.keys():
@@ -590,10 +680,10 @@ def associateOctoberData(newData=False):
     finalData['X']=X
     finalData['y']=y
     if(newData == True):
-        with open("../Data/September/newDataOct.json","w+") as f:
+        with open("../Data/October/newDataOct.json","w+") as f:
             json.dump(finalData, f)
     else:
-        with open("../Data/September/associatedTestData.json","w+") as f:
+        with open("../Data/October/associatedTestData.json","w+") as f:
             json.dump(finalData, f)
     print(missedTheCut,missedTheCutTooFew,missedthecutbadSort)
     print(errorDist)
@@ -1140,4 +1230,5 @@ if __name__=="__main__":
     #print(multilat.predictions(rssiThreshold=-102,keepNodeIds=True, isTriLat = False, month="June"))
     #loadNodes()
     #loadNodes_46()
-    associateOctoberData()
+    associateOctoberData(newData=True)
+    #newNodes_tocsv()

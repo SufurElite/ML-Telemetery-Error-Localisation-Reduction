@@ -879,7 +879,7 @@ def loadANNData_2(isTrilat=False):
                 if(isTrilat == False):
                     for optSig in optIdentified:
                         importantDs.append(optSig)
-                
+
                 fileData = {}
                 for fileE in importantDs:
                     fileData[fileE[len(fileE)-1]] = fileE[0]

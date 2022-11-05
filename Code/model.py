@@ -27,13 +27,13 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     """
     # Load in the data by the inputted boolean
     if isErrorData:
-        X, y = loadModelData(month="October",threshold=-101, verbose=False, includeCovariatePred=useCovariate)
+        X, y = loadModelData(month="June",threshold=-101, verbose=False, includeCovariatePred=useCovariate)
     else:
         X, y = loadRSSModelData(month="June",includeCovariatePred=True)
 
     # Split the data into train, test, and validation sets
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
-    X_valid, X_test, y_valid, y_test = train_test_split(X_remaining,y_remaining, test_size=0.5)
+    X_valid, X_test, y_valid, y_test = train_test_split(X_remaining,y_remaining, test_size=0.5, random_state=88)
 
     # Train a regressor on it
     reg = xgb.XGBRegressor(tree_method="hist", n_estimators=32)

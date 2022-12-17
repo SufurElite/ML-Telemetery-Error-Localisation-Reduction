@@ -27,9 +27,9 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     """
     # Load in the data by the inputted boolean
     if isErrorData:
-        X, y = loadModelData(month="June",threshold=-101, verbose=False, includeCovariatePred=useCovariate)
+        X, y = loadModelData(month="October",threshold=-101, verbose=False, includeCovariatePred=useCovariate)
     else:
-        X, y = loadRSSModelData(month="June",includeCovariatePred=True)
+        X, y = loadRSSModelData(month="October",includeCovariatePred=True)
 
     # Split the data into train, test, and validation sets
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)

@@ -220,10 +220,12 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTriLat = False, month
             # If we're doing trilateration rather than multi, keep only the 3 lowest values
             if isTriLat and len(distToNodes)==3 and X[idx]["data"][nodeId]>currentMax:
                 continue
+            if(month == "October"):
+                distToNodes.append(utils.calculateDist_2(X[idx]["data"][nodeId]))
+            else:
+                distToNodes.append(utils.calculateDist_2(X[idx]["data"][nodeId]))
 
-            distToNodes.append(utils.calculateDist_2(X[idx]["data"][nodeId]))
-            if(month != 'October'):
-                if dataEntry=="3288000000": nodeId="3288e6"
+            if dataEntry=="3288000000": nodeId="3288e6"
             nodeLocs.append([nodes[nodeId]["NodeUTMx"],nodes[nodeId]["NodeUTMy"]])
 
             '''

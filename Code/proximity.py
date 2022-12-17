@@ -10,13 +10,6 @@ import pickle
 from kmlInterface import HabitatMap, Habitat
 import utils
 
-
-import tensorflow as tf
-from tensorflow.keras.layers import *
-from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.optimizers import Adam, RMSprop, SGD
-from keras.utils import plot_model
-from tensorflow import keras
 from sklearn.model_selection import train_test_split
 import random
 
@@ -33,12 +26,15 @@ def getSignals(arr):
     return returned
 
 
-def getNodedistances(arr):
+def getNodedistances(arr, month="June"):
     '''
         Function that is used by proximityDataManipulation function. It basically goes through all the signals in a batch
         for a specific signal. Exlcudes any signals that are out of the calcluate_distance range.
     '''
-    nodes = loadNodes(rewriteUTM=True)
+    if(month == "June"):
+        nodes = utils.loadNodes(rewriteUTM=True)
+    else:
+        nodes = utils.loadNodes_46()
     keys = arr.keys()
     skipKeys = []
     #Adds the NodeIDs that has signals out of the equation range -103<RSSI<-72
@@ -91,7 +87,12 @@ def proximityDataManipulation(month="June"):
         pathName = "../Data/"+month+"/newData.json"
         with open(pathName,"r") as f:
             data = json.load(f)
-        nodes = loadNodes(rewriteUTM=True)
+        nodes = utils.loadNodes(rewriteUTM=True)
+    else:
+        pathName = "../Data/"+month+"/newData.json"
+        with open(pathName, "r") as f:
+            data = json.load(f)
+        nodes = utils.loadNodes_46()
 
     X = data["X"]
     y = data["y"]
@@ -121,7 +122,7 @@ def proximityDataManipulation(month="June"):
         #getNodedistances returns two lists. One of them contains [[relative node distances in the same batch],[position of current node], [signal of current node]]
         #The skipKeys will have all the NodeIDs of the nodes that need to be skipped because they are
         #outside of the range for the signals
-        replace, skipKeys = getNodedistances(item["data"])
+        replace, skipKeys = getNodedistances(item["data"], month)
 
         #Gets all the signals in the batch
         signals = getSignals(item["data"])
@@ -730,7 +731,7 @@ def findDistance(arr, itemSkip ,count):
 
 
 
-def loadANNData_2(isTrilat=False):
+def loadANNData_2(isTrilat=False, month="June"):
     '''
         Idea here would be gather the signal and then the calculated distance, then get what the error is
         then train the signal and the error on the model. Model would try to predict the error that is
@@ -740,8 +741,10 @@ def loadANNData_2(isTrilat=False):
         remove_highest_error functions.
     '''
     #Loads the grid, so we can exclude going over points that are already outside of the grid
-    grid, sections, nodes = utils.loadSections()
-    month = "June"
+    if(month == "June"):
+        grid, sections, nodes = utils.loadSections_Old()
+    else:
+        grid, sections, nodes = utils.loadSections()
 
     #Loads the data that was gathered inside the distanceNNData.json
     #
@@ -999,4 +1002,5 @@ def loadANNData(month="June"):
 
 
 if __name__=="__main__":
-    loadANNData_2()
+    #loadANNData_2()
+    proximityDataManipulation(month="October")

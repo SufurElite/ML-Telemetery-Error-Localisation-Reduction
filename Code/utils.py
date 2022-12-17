@@ -13,12 +13,7 @@ from scipy.optimize import curve_fit
 import pickle
 from kmlInterface import HabitatMap, Habitat
 
-import tensorflow as tf
-from tensorflow.keras.layers import *
-from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.optimizers import Adam, RMSprop, SGD
-from keras.utils import plot_model
-from tensorflow import keras
+
 from sklearn.model_selection import train_test_split
 import random
 import csv
@@ -429,7 +424,10 @@ def loadRSSModelData(month="June",includeCovariatePred = False):
                 continue
             else:
                 # otherwise set the relative x value equivalent to the distance
-                tmp_x[startIdx+nodeNum] = calculateDist_2(X_vals[i]["data"][nodeKey])
+                if(month == "October"):
+                    tmp_x[startIdx+nodeNum] = calculateDist_2(X_vals[i]["data"][nodeKey])
+                else:
+                    tmp_x[startIdx+nodeNum] = calculateDist_2(X_vals[i]["data"][nodeKey])
                 signal_X[nodeNum] = X_vals[i]["data"][nodeKey]
 
         if includeCovariatePred:
@@ -558,6 +556,8 @@ def associateOctoberData(newData=False):
         currDate = row[1]['Time.local']
         #print(currDate)
         #input()
+        #Changing NodeId - because NewData needs to find the NodeID
+        if row[1]['NodeId']=="3288000000": row[1]['NodeId']="3288e6"
 
         if baseTime == '0':
             batch = {}
@@ -607,7 +607,7 @@ def associateOctoberData(newData=False):
                 data["tag"] = tag
                 data["data"]={}
                 rowVals = 0
-                print(batch)
+                #print(batch)
                 #input()
                 for i in batch.keys():
                     # average the tag-Node RSSi value
@@ -616,7 +616,7 @@ def associateOctoberData(newData=False):
                     else:
                         data["data"][i] = batch[i][1]/batch[i][0]
                     rowVals+=batch[i][0]
-                print(data["data"])
+                #print(data["data"])
                 X.append(data)
                 if newData == True:
                     avgAlt = tagSort["AbsoluteAltitude"].mean()
@@ -657,7 +657,7 @@ def associateOctoberData(newData=False):
                 batch[row[1]['NodeId']]=[0,0,[]]
                 batch[row[1]['NodeId']][0] +=1
                 name = row[1]['NodeId']
-                if name == '3288e6': name = '3288000000'
+                if name == '3288000000': name = '3288e6'
                 batch[row[1]['NodeId']][1] = [nodeLocations[name]['Latitude'],nodeLocations[name]['Longitude']]
                 batch[row[1]['NodeId']][2].append(row[1]['TagRSSI'])
             elif row[1]['NodeId'] in batch.keys():
@@ -680,7 +680,7 @@ def associateOctoberData(newData=False):
     finalData['X']=X
     finalData['y']=y
     if(newData == True):
-        with open("../Data/October/newDataOct.json","w+") as f:
+        with open("../Data/October/newData.json","w+") as f:
             json.dump(finalData, f)
     else:
         with open("../Data/October/associatedTestData.json","w+") as f:
@@ -1032,7 +1032,7 @@ def newEquationData(month="June"):
     finalData = {}
     finalData['X']=distances
     finalData['Y']=signalStr
-    with open("../Data/June/newEquationData.json","w+") as f:
+    with open("../Data/"+month+"/newEquationData.json","w+") as f:
         json.dump(finalData, f)
 
 def deriveEquation(month="June"):
@@ -1049,7 +1049,7 @@ def deriveEquation(month="June"):
 
     #Creating csv file so that we can monitor it if wanted to
     df = pd.DataFrame(dataFrame)
-    df.to_csv("../Data/June/newEqData.csv")
+    df.to_csv("../Data/"+month+"/newEqData.csv")
 
     #Setting values to optimize the equation
     df = pd.DataFrame({"x": data["X"], "y": data["Y"]})
@@ -1205,6 +1205,12 @@ def calculateDist_3(RSSI):
 def calculateRSSI(distance):
     rssi = (np.exp((distance*-0.00568791789392432))*29.797940785785794)-102.48720932300988
     return rssi
+def calculateDist_4(RSSI):
+    '''
+        This equation was derived from the October data.
+    '''
+    dist = np.log((RSSI+102.49622423356026)/25.291400388271217)/-0.006084860650883792
+    return dist
 
 def calculateDist_2(RSSI):
     # formula from our data
@@ -1230,5 +1236,8 @@ if __name__=="__main__":
     #print(multilat.predictions(rssiThreshold=-102,keepNodeIds=True, isTriLat = False, month="June"))
     #loadNodes()
     #loadNodes_46()
-    associateOctoberData(newData=True)
+    #loadSections()
+    #associateOctoberData(newData=True)
+    #newEquationData(month="October")
+    print(deriveEquation(month="October"))
     #newNodes_tocsv()

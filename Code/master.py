@@ -15,16 +15,21 @@ def SM(month="June", rssiThreshold=-102):
         1. SM - simple multilateration
     '''
     results = predictions(rssiThreshold, month)
-def SM_MLD(month="June", rssiThreshold=-102):
+
+    return results
+def SM_MLD(month="October", rssiThreshold=-102):
     '''
         2. SM_MLD - simple multilateration and machine learning based on distance
     '''
-    pass
+    #isTrilat=isTrilat, optMultilat=optMultilat, otherMultilat=otherMultilat
+    results = rmseModel(month=month,threshold=rssiThreshold, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
+    return results
 def SM_MLS(month="June", rssiThreshold=-102):
     '''
         3. SM_MLS - simple multilateration and machine learning based on signal
     '''
-    pass
+    results = rmseModel(month=month,threshold=rssiThreshold, useCovariate=True,isErrorData=False,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
+    return results
 def SM_P(month="June", rssiThreshold=-102):
     '''
         4. SM_P - simple multilateration with signal rewriting based on the probabilistic decision tree approach
@@ -79,7 +84,7 @@ def SM_R_MLS(month="June", rssiThreshold=-102):
     pass
 
 def main():
-    pass
+    print(SM_MLD())
 
 if __name__=="__main__":
     main()

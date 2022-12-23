@@ -268,7 +268,7 @@ def loadCovariateModel():
     loadedModel = pickle.load(open("models/covariateClf", 'rb'))
     return loadedModel
 
-def loadData(month="March", pruned=False, combined = False):
+def loadData(month="March", pruned=False, isTrilat = False, optMultilat = False):
     """ Loads the data that has been stored from associateTestData,
         month specifies the month the data was taken happened (March or June)
         by default is March """
@@ -279,15 +279,14 @@ def loadData(month="March", pruned=False, combined = False):
 
     #Delete after usage.
     #Currently using another json, so we can test the function, that was written.
-    if month == "June":
+    if(isTrilat == True):
+        pathName = "../Data/"+month+"/trilatData.json"
+    if(optMultilat == True):
         pathName = "../Data/"+month+"/multilatFunctionData.json"
-    if month == "October":
-        pathName = "../Data/"+month+"/associatedTestData.json"
 
-    #Don't want to ruin the other function just yet; so another parameter if we run the combined June-March prediction
-    if combined == True:
-        if month == "March":
-            pathName = "../Data/"+month+"/associatedMarchData_2.json"
+    if month == "March":
+        pathName = "../Data/"+month+"/associatedMarchData_2.json"
+
     with open(pathName,"r") as f:
         data = json.load(f)
     return data
@@ -379,7 +378,7 @@ def loadCovariateData():
 
     return X, y
 
-def loadRSSModelData(month="June",includeCovariatePred = False):
+def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, optMultilat=False, otherMultilat=False):
     """ This is similar to loading model data, but the y values, instead of being offsets to correct
         the error derived from multilat, are the distances to each node"""
 
@@ -389,7 +388,7 @@ def loadRSSModelData(month="June",includeCovariatePred = False):
     if includeCovariatePred:
         covariateModel = loadCovariateModel()
     # load in the data
-    data = loadData(month)
+    data = loadData(month,isTrilat=isTrilat,optMultilat=optMultilat)
     X_vals = data["X"]
     y_vals = data["y"]
     assert(len(X_vals)==len(y_vals))
@@ -448,7 +447,7 @@ def loadRSSModelData(month="June",includeCovariatePred = False):
 
     return X,y
 
-def loadModelData(month="June", modelType="initial", threshold=-102, includeCovariatePred = False, verbose=True):
+def loadModelData(month="June", modelType="initial", threshold=-102, includeCovariatePred = False, verbose=True, isTrilat = False, optMultilat=False, otherMultilat=False):
     """ Unlike the regular loadData function, this one presents the information in a format
         specifically for a model to train on. The way the data will differ depends on if it's initial
         (where we'll be trying to predict offsets of the calculated values) or if it's sequential, given
@@ -457,11 +456,11 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
     if includeCovariatePred:
         covariateModel = loadCovariateModel()
     if month=="June":
-        res = multilat.predictions(threshold,keepNodeIds=True,month="June")
+        res = multilat.predictions(threshold,keepNodeIds=True, isTrilat=isTrilat, optMultilat=optMultilat,month="June", otherMultilat=otherMultilat)
     elif(month == "March"):
-        res = multilat.predictions(threshold,keepNodeIds=True,month="March")
+        res = multilat.predictions(threshold,keepNodeIds=True,isTrilat=isTrilat, optMultilat=optMultilat, month="March", otherMultilat=otherMultilat)
     else:
-        res = multilat.predictions(threshold, keepNodeIds=True,month="October")
+        res = multilat.predictions(threshold, keepNodeIds=True,isTrilat=isTrilat, optMultilat=optMultilat ,month="October",otherMultilat=otherMultilat)
 
     rewriteUtm = False
     if month=="June":
@@ -1077,122 +1076,6 @@ def deriveEquation(month="June"):
     Part for the algorithm that tries to optimize the signal strength values - working to an extent - but I don't think this is the path forward.
     We can keep this for negative results.
 
-'''
-
-'''
-    Main function for rewriting the values. This one is a recursive function, which updates a list's distances+signalsternght if the condition holds.
-    What I found out that 1 signal strenght is roughly 1 signal difference, so that is why I tried to find it till 200m roughly.
-    There is a problem with this - if all values are way off, then this function will just worsen the situation. Again, might be good to improve this somehow, or
-    find another approach.
-'''
-def rewrite(values, valuesUpdated):
-    #Base case
-    if(len(values) == 1):
-        return valuesUpdated
-    mini, index = value_finder(values)
-
-    #If there is disonance, then does the swapping
-    if(check_dissonance(values, index) == True):
-        #print("Dissonance alert!")
-        return_index, closestDist = closest_to(values, index)
-        if(abs(values[index][1]-values[return_index][1]) > 3):
-            #print("Dissonance for sure!")
-            closestDist = abs(values[index][0] - values[return_index][0])
-            #print("ClosestDistance:", closestDist)
-            negative = bool((values[index][0] - values[return_index][0]) < 0)
-            if(closestDist < 50):
-                values[index][1] = values[return_index][1]
-            elif(closestDist< 100 and closestDist>=50):
-                if(negative == True):
-                    values[index][1] = values[return_index][1] - 1
-                else:
-                    values[index][1] = values[return_index][1] + 1
-            elif(closestDist< 150 and closestDist>=100):
-                if(negative == True):
-                    values[index][1] = values[return_index][1] - 2
-                else:
-                    values[index][1] = values[return_index][1] + 2
-            elif(closestDist < 200 and closestDist>=150):
-                if(negative == True):
-                    values[index][1] = values[return_index][1] - 3
-                else:
-                    values[index][1] = values[return_index][1] + 3
-            else:
-                if(negative == True):
-                    values[index][1] = values[return_index][1] - 4
-                else:
-                    values[index][1] = values[return_index][1] + 4
-            if(values[index][1] < -102): values[index][1] = -102
-            if(values[index][1] > -73): values[index][1] = -73
-            for i in range(0,len(valuesUpdated)):
-                if(values[index][0] == valuesUpdated[i][0]):
-                    valuesUpdated[i][1] = values[index][1]
-                    valuesUpdated[i][2] = calculateDist_2(valuesUpdated[i][1])
-
-    values.remove(values[index])
-    #print("This is values updated! ",valuesUpdated)
-    #print("Values: ", values)
-    #input()
-
-    return rewrite(values, valuesUpdated)
-
-'''
-    This function checks whether there is 'dissonance' or not. Currently dissonance is defined as the following:
-        -If the signal value that is the lowest, does not have the highest sum of distances (sum of the dist that the node is away from the other nodes)
-         then there is probably a dissonance happening. Since the assumption is that if the node is the farthest away from the other nodes, then it should
-         have the lowest signal. Obviously there are cases, when this might not be true - thus there is another conditon, which is if the signal strenght
-         difference is more than 2, then we can conclude that it's probably a dissonance. Idea is currently not working, on the one hand for some reason,
-         even though the distances are optimzed and are closer to the actual distances the nodes are away from the drone, it sometimes gives an error that
-         is way off. Perhaps, gps_solve optimization does not work properly, then?? If these two methods cancel each other, then need to have a look at another
-         idea. (Currently it seems that they do cancel each other out.)
-'''
-def check_dissonance(values, index):
-    maxi = value_finder_2(values, index)
-    #print("This is maxi!", maxi)
-    #print("This is current value: ", values[index][0])
-    if(maxi > values[index][0]):
-        diss = True
-    else:
-        diss = False
-    return diss
-'''
-    This function finds the highest distance (distance means sum of the distances that the node is away from the other nodes) and returns that value
-'''
-def value_finder_2(values, index):
-    maxi = float('-inf')
-    for i in range(0,len(values)):
-        if(i == index): continue
-        if(maxi < values[i][0]):
-            maxi = values[i][0]
-    return maxi
-
-'''
-    This function finds the lowest signal value in a list and returns its index and the value
-'''
-def value_finder(values):
-    index = None
-    mini = float('inf')
-    for i in range(0,len(values)):
-        if(values[i][1] < mini):
-            mini = values[i][1]
-            index = i
-    return mini, index
-
-def closest_to(values, index):
-    keepIt = []
-    for i in range(0, len(values)):
-        if(i == index): continue
-        keepIt.append([i, abs(values[i][0]-values[index][0])])
-    mini = float('inf')
-    return_index = None
-    for j in range(0, len(keepIt)):
-        if(keepIt[j][1] < mini):
-            mini = keepIt[j][1]
-            return_index = keepIt[j][0]
-    return return_index, mini
-
-'''
-    End of the Part for the new type of approach.
 '''
 def calculateDist_3(RSSI):
     model = pickle.load(open('anndistance.sav','rb'))

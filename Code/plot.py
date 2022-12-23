@@ -1,8 +1,8 @@
 from matplotlib import pyplot as plt
 from matplotlib import colors
 from matplotlib.patches import Polygon as MatplotPoly
-from utils import loadData, loadNodes, loadBoundaries, deriveEquation, loadSections, pointToSection
-from multilat import marchPredictions, junePredictions
+from utils import loadData, loadNodes, loadBoundaries, deriveEquation, loadSections, pointToSection, loadSections_Old
+from multilat import predictions
 import os, argparse, utm
 import numpy as np
 from kmlInterface import HabitatMap, Habitat
@@ -17,12 +17,15 @@ def getSharpColors():
     """ List of nice colors for the habitat polygons on the map """
     return ["firebrick","darkgreen","blueviolet", "darkmagenta", "darkorange"]
 
-def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllData = False, sameNodeColor: bool = False):
+def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllData = False, sameNodeColor: bool = False, gridSetup="old"):
     """ Function visualise the node locations and their relative distance to one another """
     # if we are going to save the node setup, this should be the relative file path
     filePath = "/plots/Nodes/NodeSetup.png"
     # load in all the related values
-    grid, sections, nodes = loadSections()
+    if gridSetup == "old":
+        grid, sections, nodes = loadSections_Old()
+    else:
+        grid, sections, nodes = loadSections()
     habMap = HabitatMap()
     # plot variables
     fig = plt.figure()
@@ -90,12 +93,12 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
     # if we're not just saving the file return the fig, ax, sections for further plotting
     return fig, ax, sections
 
-def plotGridWithPoints(data, isSections=True, plotHabitats=False, imposeLimits = True, colorScale:bool = False, useErrorBars: bool = False, errors: list = None, sameNodeColor: bool = False):
+def plotGridWithPoints(data, gridSetup="old", isSections=True, plotHabitats=False, imposeLimits = True, colorScale:bool = False, useErrorBars: bool = False, errors: list = None, sameNodeColor: bool = False):
     """ This takes in a list of data points to be plotted on the grid
         and whether or not you want to see the sections in the grid too
         and plots accordingly """
     # Get the plot fig, ax and sections from plotNodes as a base
-    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True, sameNodeColor)
+    fig, ax, sections = plotNodes(True,isSections, plotHabitats, True, sameNodeColor, gridSetup=gridSetup)
 
     # Normalize the scale of the color to the maximum error
     if colorScale:
@@ -136,9 +139,9 @@ def plotGridWithPoints(data, isSections=True, plotHabitats=False, imposeLimits =
     # show the result
     plt.show()
 
-def plotAllData(month="June", isSections=True, plotHabitats=True, imposeLimits=True, combined=False, onlyOutside = False, sameNodeColor: bool = False):
+def plotAllData(gridSetup="old" ,month="June", isSections=True, plotHabitats=True, imposeLimits=True, combined=False, onlyOutside = False, sameNodeColor: bool = False):
     # load in a fig and ax with the node grid already displayed inplace
-    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True, sameNodeColor=sameNodeColor)
+    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True, sameNodeColor=sameNodeColor, gridSetup=gridSetup)
     # set the file path based on month and whether we're including sections and whether
     # only we're showing values outside the grid
     filePath = "/plots/"+month+"/Data"
@@ -184,11 +187,7 @@ def plotAllData(month="June", isSections=True, plotHabitats=True, imposeLimits=T
 def plotOriginal(month="March", threshold=-90):
     print("Plotting " + month + " with " + str(threshold) + " as a threshold")
     redoUtm = False
-    if month == "March":
-        res = marchPredictions(threshold)
-    else:
-        res = junePredictions(threshold)
-        redoUtm= True
+    res = predictions(month=month)
     nodes = loadNodes(redoUtm)
     # removed the boundaries as hardset since
     # the first test is outside the bounds?

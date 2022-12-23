@@ -6,7 +6,7 @@ https://github.com/dmlc/xgboost/blob/master/demo/guide-python/multioutput_regres
 import numpy as np
 from matplotlib import pyplot as plt
 import xgboost as xgb
-from utils import loadModelData, loadRSSModelData, loadCovariateData, loadSections, pointToSection, loadNodes
+from utils import loadModelData, loadRSSModelData, loadCovariateData, loadSections, pointToSection, loadNodes, loadSections_Old, loadNodes_46
 import proximity
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -17,7 +17,7 @@ from multilat import gps_solve
 from kmlInterface import HabitatMap, Habitat
 from plot import plotGridWithPoints
 
-def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData: bool =True, useErrorBars: bool = False, useColorScale: bool = True, plotError: bool = True, useThresholdError: bool = False, sameNodeColor: bool = False):
+def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, sectionThreshold: int =50, isErrorData: bool =True, useErrorBars: bool = False, useColorScale: bool = True, plotError: bool = True, useThresholdError: bool = False, sameNodeColor: bool = False, isTrilat: bool=False, optMultilat: bool=False, otherMultilat: bool=False):
     """ Root mean squared error XGBoost trained on the june data
             useCovariate : bool, refers to whether or not to include the predicted habitat with determining
             the location
@@ -27,9 +27,9 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     """
     # Load in the data by the inputted boolean
     if isErrorData:
-        X, y = loadModelData(month="October",threshold=-101, verbose=False, includeCovariatePred=useCovariate)
+        X, y = loadModelData(month=month,threshold=threshold, verbose=False, includeCovariatePred=useCovariate, isTrilat=isTrilat, optMultilat=optMultilat, otherMultilat=otherMultilat)
     else:
-        X, y = loadRSSModelData(month="October",includeCovariatePred=True)
+        X, y = loadRSSModelData(month=month,includeCovariatePred=True, isTrilat=isTrilat, optMultilat=optMultilat, otherMultilat=otherMultilat)
 
     # Split the data into train, test, and validation sets
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
@@ -45,7 +45,11 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     avgError = [0,0]
 
     # determine the different node locations in the order derived from list(nodes.keys()) - order matters
-    nodes = loadNodes(rewriteUTM=True)
+    if month=="June" or month=="March":
+        nodes = loadNodes(rewriteUTM=True)
+    else:
+        nodes = loadNodes_46()
+
     nodeLocs = []
     for node in list(nodes.keys()):
         nodeLocs.append([nodes[node]["NodeUTMx"],nodes[node]["NodeUTMy"]])
@@ -83,10 +87,17 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     freqErrorSections = {}
     freqErrorHabitats = {}
     # want to load in the section nodes
-    grid, sections, nodes = loadSections()
+    if month=="June" or month=="March":
+        grid, sections, nodes = loadSections_Old()
+        gridS = "old"
+    else:
+        grid, sections, nodes = loadSections()
+        gridS = "new"
     # load in the habitat
     habitatMap = HabitatMap()
 
+    #Storing the results, so we can compare it with other approaches
+    results = {}
 
     # errorLocs will contain all the locations of the errors to plot
     errorLocs = []
@@ -128,6 +139,12 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
         dist = np.linalg.norm(predicted-gt)
         errorDirections.append([predicted[0]-gt[0],predicted[1]-gt[1]])
         allErrors.append(dist)
+
+        #Storing the resutls
+        results[idx] = {"gt":gt,
+                       "predicted":predicted,
+                       "error":dist,
+                       "errorDirections":[predicted[0]-gt[0],predicted[1]-gt[1]]}
         # if we're not using the threshold or if the distance is >= threshold,
         # collect the section and habitat frequencies
         if not useThresholdError or dist>=sectionThreshold:
@@ -167,12 +184,12 @@ def rmseModel(useCovariate: bool =False, sectionThreshold: int =50, isErrorData:
     # determine whether to plot all the error locations
     if plotError:
         if useErrorBars:
-            plotGridWithPoints(errorLocs,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=True, errors=errorDirections, sameNodeColor=sameNodeColor)
+            plotGridWithPoints(errorLocs,gridSetup=gridS,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=True, errors=errorDirections, sameNodeColor=sameNodeColor)
         elif useColorScale:
-            plotGridWithPoints(errorLocs,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = True, errors=allErrors, sameNodeColor=sameNodeColor)
+            plotGridWithPoints(errorLocs,gridSetup=gridS,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = True, errors=allErrors, sameNodeColor=sameNodeColor)
         else:
-            plotGridWithPoints(errorLocs,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = False, errors=None, sameNodeColor=sameNodeColor)
-
+            plotGridWithPoints(errorLocs,gridSetup=gridS,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = False, errors=None, sameNodeColor=sameNodeColor)
+    return results
 def covariateTrain(saveModel=False):
     """ Creates a Classifier to determine the habitat given the signals in a particular location,
         based on march data"""
@@ -212,20 +229,6 @@ def getClassificationMetrics(y_test, y_pred):
     print(classification_report(y_test, y_pred))
 
 
-def MLPModel():
-    '''
-        Tried out the method proposed in a paper. But this is just plain bad. Can't even fith the data.
-    '''
-    X, y = LoadMLPData()
-    X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
-    clf = MLPRegressor(hidden_layer_sizes=(8,10,8,8,6), max_iter=1000,activation='relu',solver='adam', random_state=1)
-    clf2= MLPRegressor(hidden_layer_sizes=(8,8,6), max_iter=300,activation='relu',solver='adam', random_state=1)
-    #print(y_train[:,0])
-    #print(y_train[:,1])
-    #print(y_train)
-    clf.fit(X_train, y_train)
-    #yPred = clf.predict(X_remaining)
-
 def ANNDistanceModel(save = False):
     '''
         Wanted to try out whether an MLPRegressor would be able to find a better equation for the distance~RSSI.
@@ -256,6 +259,7 @@ def ANNDistanceModel(save = False):
 
 
 if __name__ == "__main__":
-    rmseModel(useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
+    rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
+    rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True, isTrilat=False, optMultilat=False, otherMultilat=False)
     #MLPModel()
     #ANNDistanceModel(save = False)

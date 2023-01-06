@@ -243,9 +243,15 @@ def ANNDistanceModel(save = False):
     """
 
     # Load in the new data for determining a new equation
-    with open("../Data/June/newData.json","r") as f:
+    with open("../Data/June/newEquationData.json","r") as f:
         data = json.load(f)
-    X, y = data['X'], data['y']
+    tmp_X, y = data['X'], data['Y']
+    assert(len(tmp_X)==len(y))
+    X = []
+    for i in range(len(tmp_X)):
+        X.append([tmp_X[i]])
+    X = np.array(X)
+    
     # Split the data create a classifier
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
     clf= MLPRegressor(hidden_layer_sizes=(8,6,4), max_iter=10000,activation='relu',solver='adam', random_state=1)
@@ -270,5 +276,6 @@ def ANNDistanceModel(save = False):
 
 
 if __name__ == "__main__":
-    rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
-    rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True, isTrilat=False, optMultilat=False, otherMultilat=False)
+    #rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
+    #rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True, isTrilat=False, optMultilat=False, otherMultilat=False)
+    ANNDistanceModel()

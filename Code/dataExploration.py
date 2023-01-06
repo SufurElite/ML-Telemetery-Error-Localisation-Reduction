@@ -2,11 +2,8 @@
     A file that contains functions related to exploratory data analysis.
 """
 import numpy as np
-import pandas as pd
-import math
 import utils
 import json, utm
-import datetime
 import multilat
 from vincenty import vincenty
 
@@ -105,9 +102,13 @@ def closestNodeCount(month="March"):
     print("""The number incorrectly determined by RSS->distance was {}\nThe number correctly determined by RSS->distance was {}\nThe number of second closest determined by RSS->distance was {}.\n""".format(wrongCount, approximatedCount, wasSecondClosest))
     print("Here is the dictionary of each node that was misclassified and the number of misclassifications they had with other nodes:")
     print(frequencyConfused)
-def orderedStrengths(month="June"):
-    #I believe it would be nice to have it like this
-    #We can derive other equations from other months as well if needed
+
+def orderedStrengths(saveFilteredDist=False, month="June"):
+    """
+        Using the new data, we bucket the errors to see how far off 
+        the distances are between [0,20], (20,50], (50,75], (75,100), (100, inf)
+        And we also save the distances and the signal strengths to graph on an x,y cartesian plot
+    """
     pathName = "../Data/"+month+"/newData.json"
     with open(pathName,"r") as f:
         data = json.load(f)
@@ -117,7 +118,7 @@ def orderedStrengths(month="June"):
     signalStr = []
     #drone distance from nodes -> x values
     distances = []
-    #Errors - 0-20m, 21m-50m, 51m-75m, 75m-100m, 100m<
+    #Bucket the errors - 0-20m, 21m-50m, 51m-75m, 75m-100m, 100m<
     errors = [0,0,0,0,0]
     #Loop through the items in data set X
     for index, item in enumerate(data["X"]):
@@ -127,30 +128,32 @@ def orderedStrengths(month="June"):
         #Loop through each item in X data set
         newItems = {}
         for key in keys:
-            add = True
-            if item["data"][key][2][0] < -102 or item["data"][key][2][0] > -73:
-                add = False
+            if item["data"][key][2][0] < -102 or item["data"][key][2][0] > -73: continue
             #Set pointA to be the location of the drone
             pointA = (data["y"][index][0],data["y"][index][1])
             pointB = (item["data"][key][1][0],item["data"][key][1][1])
 
-            #Using vincenty alorithm to calculate the distance between them in km
-            #It is said to be quite accurate, metre specific accuracy
-            distance = vincenty(pointA, pointB)
             #Exclude the useless data points
             if(pointA == (0,0) or pointA == (0.754225181062586, -12.295563892977972) or pointA == (4.22356791831445, -68.85519277364834)): continue
-            #Otherwise we convert into meters
+
+            # Using vincenty alorithm to calculate the distance between them in km
+            distance = vincenty(pointA, pointB)
+            #Convert into meters
             distance = distance*1000
 
             #Set the signal
             distance = round(distance,2)
             signal = item["data"][key][2][0]
-            if(add== True):
-                distance_2 = round(utils.calculateDist_2(signal),2)
-                replace = [signal,distance,distance_2]
-            if(add == True):
-                newItems[key] = replace
-            #item["data"][key] = replace
+            
+            
+            distance_2 = round(utils.calculateDist_2(signal),2)
+            replace = [signal,distance,distance_2]
+            newItems[key] = replace
+
+            distances.append(distance)
+            signalStr.append(signal)
+        
+        # Now bucket the errors
         sort_orders = sorted(newItems.items(), key=lambda x: x[1][1])
         for i in sort_orders:
             print(i[1])
@@ -210,19 +213,18 @@ def orderedStrengths(month="June"):
                         errors[0][i[1][0]] += 1
             print(err)
             print(errors)
-            #input()
-        #item["data"] = sort_orders
-        #print(sort_orders)
-        #input()
 
     #Make sure that the values are the same length; suitable for plotting
     assert(len(signalStr) == len(distances))
     finalData = {}
     finalData['X']=distances
     finalData['Y']=signalStr
-    #with open("../Data/June/newDataDistanceFiltered.json","w+") as f:
-    #    json.dump(finalData, f)
+    if saveFilteredDist:
+        with open("../Data/June/newDataDistanceFiltered.json","w+") as f:
+            json.dump(finalData, f)
+
 def closest_to(number, numbers):
+    """ Helper function to find the two indices of the numbers closest to provided number """
     values = []
     for i in range(0,len(numbers)):
         values.append(abs(numbers[i] - number))
@@ -287,7 +289,7 @@ def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
     print("Thus the function had a total overall average error of {} m".format((totalDistanceError[0]/totalDistanceError[1])))
 
 def dataGridSections(month="June"):
-    """ Check the frequency of the data from a given month in particular sectionsof the grid """
+    """ Check the frequency of the data from a given month in particular sections of the grid """
     # load in the varying values
     grid, sections, nodes = utils.loadSections()
     # get the lat longs of the month
@@ -314,7 +316,7 @@ def findAvgTrueError(verbose = False):
     """ Given all the actual distances to the nodes,
         calculate multilat and determine the error """
     # Loads in data where the X is the calculated dist to each node
-    # and y is the actul dist to each node
+    # and y is the actual dist to each node
     X, y = utils.loadRSSModelData(month = "June")
     # Generate the node locations in a list
     nodes = utils.loadNodes(True)
@@ -342,91 +344,6 @@ def findAvgTrueError(verbose = False):
             print("{}, current error : {}, running average error : {}".format(i, dist, errors[0]/errors[1]))
     # show the average error
     print(errors[0]/errors[1])
-'''
-    Testing out the funcitonal model and then the sequential models in tensorflow, so I understand how to implement it in the end.
-    It will probably take 3 inputs -> distanceCalculated, errProb, errVal; 1 output -> predicted error
-    I'll use this as a sample later on.
-'''
-
-def FunctionalModel():
-    X, y = loadANNData_3()
-    #print(y)
-    y = np.array(y, dtype="float64")
-    print(y)
-    i1 = np.array(X,dtype="float64")
-    print(i1[0])
-    input()
-    #i2 = np.array(X[1], dtype="float64")
-    #print(i2[0])
-    #input()
-    #i3 = np.array(X[2], dtype=object)
-    #print(i3[0])
-    #input()
-
-    print(i1[0].shape)
-    print(i1.shape)
-    input()
-    print(i1)
-    print("\n")
-    input()
-    '''
-    for i in range(0,600):
-        print(i1[i].shape,i2[i].shape,i3[i].shape)
-    input()
-    '''
-    #print(X[0])
-    #input()
-    #input1 = Input(shape=(16,))
-    '''
-    input2 = Input(shape=(17,))
-    #input0 = Concatenate()([input1, input2])
-    x = Dense(2)(input2)
-    hidden1 = Dense(10,activation='relu')(x)
-    hidden2 = Dense(8,activation='relu')(hidden1)
-    hidden3 = Dense(6, activation='relu')(hidden2)
-    output = Dense(1,activation='relu')(hidden3)
-    model = Model(inputs=input2, outputs=output)
-    model.summary()
-    model.compile(
-        loss="mean_squared_error",
-        optimizer="adam",
-        metrics=["mean_absolute_error"]
-    )
-    '''
-    model = Sequential()
-    model.add(Dense(1, input_dim=1, activation="relu"))
-    model.add(Dense(1, activation="linear"))
-    opt = SGD(learning_rate=0.01,momentum=0.9)
-    model.compile(
-        loss="mean_squared_logarithmic_error",
-        optimizer=opt,
-        metrics=["mse"]
-
-    )
-    x_train, x_test, y_train, y_test = train_test_split(i1, y, train_size=0.8, random_state=101)
-    print(x_train)
-    print(y_train)
-    input()
-    #print(x1_train[0],x2_train[0], y_train[0])
-    #input()
-    history = model.fit(x_train, y_train, batch_size=64, epochs=100, validation_split=0.2)
-    test_scores = model.evaluate(x_test, y_test, verbose=2)
-    print("Test loss:", test_scores[0])
-    print("Test accuracy:", test_scores[1])
-    print(test_scores)
-    predicted = model.predict(x_test)
-
-    print(predicted)
-    print(y_test)
-    for i in range(0,len(y_test)):
-        print(predicted[i], "and",y_test[i], "and", x_test[i])
-        input()
 
 if __name__=="__main__":
-    #closestNodeCount()
-    #compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16)
-    #checkBatches()
-    #orderedStrengths()
-    numbers = [210,145,302]
-    number = 219
-    print(closest_to(number,numbers))
+    dataGridSections()

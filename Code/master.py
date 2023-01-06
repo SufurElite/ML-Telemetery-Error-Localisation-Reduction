@@ -76,7 +76,7 @@ def ST_P_MLS(month="June", rssiThreshold=-102, useCovariate=True):
 
     return results
 
-def all_variants(function_mappings, month, rssiThreshold, useCovariate):
+def all_funcs(function_mappings, month, rssiThreshold, useCovariate):
     """
         Runs through all functions given particular parameters and saves the results
     """
@@ -124,7 +124,7 @@ if __name__=="__main__":
     parser.add_argument("-m", "--month", help="month (either \"March\", \"June\", etc.)", type = str)
     parser.add_argument("-t", "--threshold", help="Radio Signal Threshold", type=int)
     parser.add_argument("-c", "--covariate", help="If you want to include the habitat prediction in the model, include this flag", type=bool, action=argparse.BooleanOptionalAction)
-    parser.add_argument("-a", "--all_variants", help="If you want to include all the variants, include this flag", type=bool, action=argparse.BooleanOptionalAction)
+    parser.add_argument("-a", "--all_variants", help="If you want to run all the functions, include this flag", type=bool, action=argparse.BooleanOptionalAction)
 
     args = parser.parse_args()
 
@@ -137,7 +137,7 @@ if __name__=="__main__":
 
     if args.all_variants:
         print("Run all the variants with parameters: \n\tMonth: {}, \n\tThreshold: {} \n\tUse Habitat Predictions: {}".format(month,rssiThreshold,useCovariate))
-        all_variants(function_mappings)
+        all_funcs(function_mappings)
     elif args.func in function_mappings.keys():
         print("Running {} with parameters: \n\tMonth: {}, \n\tThreshold: {} \n\tUse Habitat Predictions: {}".format(args.func,month,rssiThreshold,useCovariate))
         specific_result(function_mappings, args.func, month, rssiThreshold, useCovariate)

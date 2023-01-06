@@ -276,6 +276,5 @@ def ANNDistanceModel(save = False):
 
 
 if __name__ == "__main__":
-    #rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
-    #rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True, isTrilat=False, optMultilat=False, otherMultilat=False)
-    ANNDistanceModel()
+    rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
+    rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True, isTrilat=False, optMultilat=False, otherMultilat=False)

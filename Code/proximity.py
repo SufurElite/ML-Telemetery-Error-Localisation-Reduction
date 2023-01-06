@@ -1,30 +1,18 @@
-import pandas as pd
-import numpy as np
-import json, utm
-import datetime
-import multilat
-import math
-from vincenty import vincenty
-from scipy.optimize import curve_fit
-import pickle
-from kmlInterface import HabitatMap, Habitat
-import utils
-
-from sklearn.model_selection import train_test_split
-import random
-
-
-'''
+"""
     This file contains the probabilsitic decision tree approach. It tries to find the best signals by looking into how far the
     nodes that get the signal are from each other. The other way to utilize this file is by rewriting the identified signal values,
     which then are rewritten in hopes to optimize the data.
-'''
+"""
+
+import numpy as np
+import json, utm
+import math
+import utils
+import random
 
 
 def getSignals(arr):
-    '''
-        Function that is used by proximityDataManipulation function - to get all the signals in the specific list.
-    '''
+    """ Function that is used by proximityDataManipulation function -  to get all the signals in the specific list. """
     keys = arr.keys()
     returned = {}
     for key in keys:
@@ -33,10 +21,11 @@ def getSignals(arr):
 
 
 def getNodedistances(arr, month="June"):
-    '''
-        Function that is used by proximityDataManipulation function. It basically goes through all the signals in a batch
-        for a specific signal. Exlcudes any signals that are out of the calcluate_distance range.
-    '''
+    """
+        Function that is used by proximityDataManipulation function. It basically goes 
+        through all the signals in a batch for a specific signal. Excludes any signals 
+        that are out of the calcluate_distance range.
+    """
     if(month == "June"):
         nodes = utils.loadNodes(rewriteUTM=True)
     else:
@@ -46,7 +35,6 @@ def getNodedistances(arr, month="June"):
     #Adds the NodeIDs that has signals out of the equation range -103<RSSI<-72
     for keyS in keys:
         if(keyS == "3288000000"): key="3288e6"
-        currentNode = arr[keyS]
         if(arr[keyS][2][0] < -101):
             skipKeys.append(keyS)
         if(arr[keyS][2][0] > -73):
@@ -57,7 +45,6 @@ def getNodedistances(arr, month="June"):
     for key in keys:
         if(key == "3288000000"): key="3288e6"
         if(key in skipKeys):continue
-        currentNode = arr[key]
         nodeDistances=[]
         currentNodePos = [nodes[key]['Latitude'],nodes[key]['Longitude']]
         utmCurrentNodePos = utm.from_latlon(currentNodePos[0], currentNodePos[1])
@@ -79,7 +66,7 @@ def getNodedistances(arr, month="June"):
 
 
 def proximityDataManipulation(month="June"):
-    '''
+    """
         Idea is that if we give the machine the distances it is away from other nodes and the signal strength, we would be able to predict the distance it is away from
         the actual node.
         So, basically trying to reproduce the 'proximity' filter, with a possible neural network in the end.
@@ -87,34 +74,30 @@ def proximityDataManipulation(month="June"):
         Since, the distance ~ signalStr equation in itself is not enough to make the prediction to the actual distance be completely accurate.
         This gathers data, from the newData.json
 
-    '''
+    """
     if(month =="June" or month=="March"):
         # Load in the June JSON
         pathName = "../Data/"+month+"/newData.json"
         with open(pathName,"r") as f:
             data = json.load(f)
-        nodes = utils.loadNodes(rewriteUTM=True)
     else:
         pathName = "../Data/"+month+"/newData.json"
         with open(pathName, "r") as f:
             data = json.load(f)
-        nodes = utils.loadNodes_46()
 
-    X = data["X"]
-    y = data["y"]
     newX = []
     newY = []
     newZ = []
-    '''
-    #Going to gather the new data pairs in the form of:
-    #Elements of newX will look like: [
-    #                                   [signalStrength of the current node in the batch],
-    #                                   [all relative node distances in the same batch, that also have relevant signal],
-    #                                   [all relative node signals in the same batch, that are relevant]
-    #                                   [batch_number]]
-    #Elements of newY will look like: [distance between current node and the drone]
-    '''
-    n = 0
+    """
+    Going to gather the new data pairs in the form of:
+    Elements of newX will look like: [
+                                       [signalStrength of the current node in the batch],
+                                       [all relative node distances in the same batch, that also have relevant signal],
+                                       [all relative node signals in the same batch, that are relevant]
+                                       [batch_number]]
+    Elements of newY will look like: [distance between current node and the drone]
+    """
+
     for index, item in enumerate(data["X"]):
 
         #Keys
@@ -172,10 +155,9 @@ def proximityDataManipulation(month="June"):
             json.dump(finalData, f)
 
 def error_calculation(arr, identified):
-    '''
+    """
         This function uses similar idea as the check_dissonance, but is an entirely idfferent approach.
-        Jesus it's such a mindfuck to explain what this is doing, but I will try.
-        So, this function in simple terms going to calculate the error likliness for each signal in a batch.
+        In simple terms, the aim is to calculate the error likliness for each signal in a batch.
         Obviously if there are more 'faulty' signals, then the other 'good' signal values are going to increase
         as well. We don't want that. So, this function is going to be called recursively after the highest
         error is going to be removed, and perhaps changed into a better representation of the signal. OR
@@ -183,14 +165,14 @@ def error_calculation(arr, identified):
 
         The way it calcualtes the error is by calculating the otherNode locations to the node that the current signal
         is received by. By the assumption that the lower the signal, the higher the 'drone' is and that means the otherNodes are
-        also higher, meaning it should have the highest nodeDistanceMean whatsoever.
+        also higher, meaning it should have the highest nodeDistanceMean.
         Then we would check how much percentage is it needed to get to below and above the certain value, based on whether the signal
         is lower or higher than the current one.
         And then punishment / reward numerator is added, then it is all divided by a size (the highest probability it can get)-
-        Thus, giving us a cool value for error. But as said before, if there is a wrong signal in the batch, that is going to increase the
+        Thus, giving us a value for error. But as said before, if there is a wrong signal in the batch, that is going to increase the
         other signals' errors as well. So, that's why we are re-running this whole thing, after identifying one wrong signal.
         Currently, this function only works for choosing the lowest error producing signals etc.
-    '''
+    """
     currSig = arr[0]
     currDistS = arr[1]
     currOtherSig = arr[2]
@@ -198,7 +180,6 @@ def error_calculation(arr, identified):
     size = (len(currOtherSig))
     numerator = 0
     endPercent = 50
-    errorDistances = []
 
     errorVal = []
     for i in range(0,len(currOtherSig)):
@@ -273,33 +254,15 @@ def error_calculation(arr, identified):
                     numerator += addNum
         errorVal.append([addErr,currOtherSig[i],dissonant])
 
-        '''
-        if(addNum != 0):
-            dist1 = calculateDist_2(currSig)
-            dist2 = calculateDist_2(currOtherSig[i])
-            err = abs(dist1-dist2)
-            if(currOtherSig[i] < currSig):
-                err = err*(percent2/endPercent)
-            elif(currOtherSig[i] > currSig):
-                err = -err*(percent/endPercent)
-            else:
-                if(percent2 > percent):
-                    err = err*(percent2/endPercent)
-                else:
-                    err = -err*(percent/endPercent)
-            #errorDistances.append([addNum, err, currOtherSig[i])
-            if(len(errorDistances) == 0):
-                errorDistances.append([currSig, arr[len(arr)-2]])
-        '''
-    '''
+    """
         Next step is to get the error guesses for each signal out of this function. But currently, this
         function just serves as an error probability function.
-    '''
+    """
 
     return [arr, round(numerator/size*100,2), errorVal]
 
 def removeHighestError(arr, arr2, identified):
-    '''
+    """
         This function after getting the 3 lists: All node data, all node errors, identified node data
         Searches for the highest / lowest error in the node_errors (that are values returned from error_calculation)
         does a deviation on both of them, whichever is higher, adds that signal into the identified data.
@@ -312,7 +275,7 @@ def removeHighestError(arr, arr2, identified):
         Then if the identified length and the arr length difference is 3, then we actually take out the values from arr.
         Then they are going to be passed to the function, for so it adds those 3 signals with the neccesary NodeIDs
         for later trilateriation.
-    '''
+    """
     arrCopy = arr.copy()
     arr2_sorted = sorted(arr2)
 
@@ -332,8 +295,6 @@ def removeHighestError(arr, arr2, identified):
 
         return arr, identified, arrCopy
     else:
-        inside = []
-        outside = []
         lowest = 100
         highest = -1
         for err in range(0,len(arr2)):
@@ -361,11 +322,11 @@ def removeHighestError(arr, arr2, identified):
 
 
 def deviation(arr, value):
-    '''
+    """
      Takes an array of values and a value inside of that array. Calculates how much does
      that value deviate from the other values. The function is used when choosing which error
      probability to take into the identified signals.
-    '''
+    """
     total = 0
     for i in range(0, len(arr)):
         total += pow(arr[i]-value,2)
@@ -374,21 +335,21 @@ def deviation(arr, value):
 
 
 def insideIdentified(arr, index):
-    '''
+    """
         This one gets an array (this function only is used by the identified list) and an index.
         Then it checks whether that index is inside the identified or not. If it is return True, otherwise False.
         This function is crucial in determining, whether the highest 'error' value is already inside the identified list.
-    '''
+    """
     for i in range(0, len(arr)):
         if(arr[i][1] == index):
             return True
     return False
 
 def insideIdentified_2(arr, value):
-    '''
+    """
         This works in similar manner, but it check for the nodeDistSum value. Check whether it is inside the identified or not.
         There was an issue with the index approach, so needed to use this in a specific case.
-    '''
+    """
     for i in range(0, len(arr)):
         if(arr[i][0][1] == value):
             return True
@@ -396,22 +357,22 @@ def insideIdentified_2(arr, value):
 
 
 def findIndex(arr, value):
-    '''
+    """
         This is used to find the lowest and/or highest error inside the identified list. The function only
         is used once,when the first value is taken out. So, there is no need to worry about duplication.
         (so taking out the wrong value etc.)
-    '''
+    """
     for i in range(0, len(arr)):
         if(arr[i] == value):
             return i
 
 
 def testLowest(arr):
-    '''
+    """
         This basically is the function that can replace the error_calculation function, if we want to
-        choose the lowest error producing signals, just by looking at the error values. So, bascially gettin all the signals
-        that are the lowest producing (the 3 lowest).
-    '''
+        choose the lowest error producing signals, just by looking at the error values. So, 
+        bascially getting all the signals that are the lowest producing (the 3 lowest).
+    """
     err = []
     for i in range(0,len(arr)):
         err.append(arr[i][6])
@@ -431,7 +392,7 @@ def testLowest(arr):
     return newImportant
 
 def optimizeSignal(arr, arr2, arr3, arr4):
-    '''
+    """
         This funciton is going to change the identified error signals' signal and then a new signal is going to be passed,
         to the data gathering, which will be a more accurate, optimized signal of the signals. Then, multilateration is
         going to be applied. Eventually it should increase the accuracy.
@@ -443,7 +404,7 @@ def optimizeSignal(arr, arr2, arr3, arr4):
             [[sigDiff*probability, signalThatIsDissonantTo, DissonantOrNotBool],...]
         arr3 structure:
             Identified signals, that are going to be changed for better multilateration.
-    '''
+    """
 
     currReplace = arr3[len(arr3)-1][0]
 
@@ -518,10 +479,10 @@ def optimizeSignal(arr, arr2, arr3, arr4):
             index += 1
         evaluateChanges.append([good-bad, changeSig])
 
-    '''
+    """
         Now, choose the one that has the best 'good' - then replace the signal with that.
         So, now we have an optimised signal. We will be able to use this for multilateration.
-    '''
+    """
     maxi2 = -1000
     for ev in range(0,len(evaluateChanges)):
         if(maxi2 < evaluateChanges[ev][0]):
@@ -583,11 +544,11 @@ def findOptimisedSignal(arr, ogSign):
 
 
 def signalFit(arr, arr2):
-    '''
+    """
         Checks whether the signals follow the rule or not.
         sig1 > sig2
         dist1 < dist 2
-    '''
+    """
     sig1 = arr2[0]
     sig2 = arr2[1]
     dist1 = arr[0]
@@ -604,10 +565,10 @@ def signalFit(arr, arr2):
             return False
 
 def findDistance(arr, itemSkip ,count):
-    '''
+    """
         Finds the corresponding distances when the optimisation encounters signals that are the same.
         So, we can apply a different optimisation.
-    '''
+    """
     count2 = 0
     distance = None
     for i in range(0,len(arr)):
@@ -620,14 +581,14 @@ def findDistance(arr, itemSkip ,count):
 
 
 def loadProbabilistc_DecisionTree_Data(isTrilat=False, month="June"):
-    '''
+    """
         Idea here would be gather the signal and then the calculated distance, then get what the error is
         then train the signal and the error on the model. Model would try to predict the error that is
         contributed to the signal~distance.
 
         Currently, it just gathers 3-lowest-error producing errors that were identifed by the errr_calculation and
         remove_highest_error functions.
-    '''
+    """
     #Loads the grid, so we can exclude going over points that are already outside of the grid
     if(month == "June" or month=="March"):
         grid, sections, nodes = utils.loadSections_Old()
@@ -638,10 +599,7 @@ def loadProbabilistc_DecisionTree_Data(isTrilat=False, month="June"):
     pathName = "../Data/"+month+"/distanceNNData.json"
     with open(pathName,"r") as f:
         data = json.load(f)
-    iput1 = []
-    iput2 = []
-    iput3 = []
-    output = []
+    
     batchN = 0
     a = 0
     distanceSum = []
@@ -657,7 +615,7 @@ def loadProbabilistc_DecisionTree_Data(isTrilat=False, month="June"):
         predicted = utils.calculateDist_2(i[0])
         err = actual - predicted
         err = np.float64(err)
-        '''
+        """
             Intitialises the importanD, values that are going to be used in the function or other places
             i[0] - signalStr
             i[1] - nodeSum- for the current node that received i[0]
@@ -666,7 +624,7 @@ def loadProbabilistc_DecisionTree_Data(isTrilat=False, month="June"):
             predicted - predicted distance by equation
             i[3] - id; so we can identify different batches etc.
             i[4] - nodeID
-        '''
+        """
         importantD = [i[0], i[1], i[2], actual, predicted, err, i[3], i[4]]
 
         importantD[1] = sum(importantD[1])/len(importantD[1])
@@ -698,25 +656,25 @@ def loadProbabilistc_DecisionTree_Data(isTrilat=False, month="June"):
                     if(e == distanceSum[j][1]): continue
                     addTotals.append(distanceSum[j][0])
                 importantDs[e].insert(3, addTotals)
-            '''
+            """
                 This is where we calculate the value between that will be between -1 to 1, that will tell us
                 how big the error could be
                 The next value then will tell us how likely the error is
                 Those two values are going to be used by the machine along with the signal, to predict the error
                 Then the error is going to be added to the calcualted distance, giving a better result for the RSSI ~ Distance
-            '''
+            """
 
             #Get coordinates of the drone, if inside the grid then do the calcualtion otherwise skip for now
             utmCord = utm.from_latlon(keptDronePos[0],keptDronePos[1])
             inside = utils.pointToSection(utmCord[0], utmCord[1], sections)
-            '''
+            """
                 Idea for error calculation // signal re-calculation. We will re-calculate all signals except for 3.
                 So, we basically will make use of the trilateration - rewrite all signals except for those that have
                 the highest accuracy according to the function.
                 Then we can do two things. Either do multilateration with the all data (including the 3 signals
                 that were not change) or do multilateration with the signals excluding the 3 signals that were not
                 changed.
-            '''
+            """
 
             if(inside != -1):
                 identified = []
@@ -752,9 +710,9 @@ def loadProbabilistc_DecisionTree_Data(isTrilat=False, month="June"):
                     if(len(newImportants) == 3):
                         canCont = True
 
-                '''
+                """
                     Gathering the data for a trilateration.json or multilateration.json
-                '''
+                """
 
                 #If not trilateration add the replaced signal values - corrected signals
                 if(isTrilat == False):
@@ -827,4 +785,3 @@ def loadANNData(month="June"):
 
 if __name__=="__main__":
     loadProbabilistc_DecisionTree_Data(isTrilat=False, month="October")
-    #proximityDataManipulation(month="October")

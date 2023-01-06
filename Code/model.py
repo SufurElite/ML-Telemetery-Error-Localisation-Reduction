@@ -140,9 +140,9 @@ def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, s
         errorDirections.append([predicted[0]-gt[0],predicted[1]-gt[1]])
         allErrors.append(dist)
 
-        #Storing the resutls
+        #Storing the results
         results[idx] = {"gt":gt,
-                       "predicted":predicted,
+                       "res":predicted,
                        "error":dist,
                        "errorDirections":[predicted[0]-gt[0],predicted[1]-gt[1]]}
         # if we're not using the threshold or if the distance is >= threshold,

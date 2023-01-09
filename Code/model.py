@@ -84,7 +84,6 @@ def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, s
     # Now we evaluate on the test set
     # predict on unseen test set
     yTestPred = reg.predict(X_test)
-
     # we want to find all the error values as well
     # as their respective locations and habitats
     allErrors = []
@@ -171,7 +170,6 @@ def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, s
         print("The test errors over {} m had the following section distribution: ".format(sectionThreshold))
     else:
         print("The test errors had the following section distribution: ")
-
     for secKey in freqErrorSections.keys():
         print("{} : {}".format(secKey,freqErrorSections[secKey]))
     # Display the habitat frequency errors

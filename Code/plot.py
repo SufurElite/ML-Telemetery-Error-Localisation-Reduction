@@ -1,10 +1,10 @@
 from matplotlib import pyplot as plt
 from matplotlib import colors
 from matplotlib.patches import Polygon as MatplotPoly
-from utils import loadData, loadNodes, loadBoundaries, deriveEquation, loadSections, pointToSection
-from multilat import marchPredictions, junePredictions
+from utils import loadData, loadNodes, loadBoundaries, deriveEquation, loadSections, pointToSection, loadSections_Old
+from multilat import predictions
 import os, argparse, utm
-import numpy as np 
+import numpy as np
 from kmlInterface import HabitatMap, Habitat
 
 # from https://stackoverflow.com/questions/14720331/how-to-generate-random-colors-in-matplotlib
@@ -17,22 +17,25 @@ def getSharpColors():
     """ List of nice colors for the habitat polygons on the map """
     return ["firebrick","darkgreen","blueviolet", "darkmagenta", "darkorange"]
 
-def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllData = False, sameNodeColor: bool = False):
+def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllData = False, sameNodeColor: bool = False, gridSetup="old"):
     """ Function visualise the node locations and their relative distance to one another """
     # if we are going to save the node setup, this should be the relative file path
     filePath = "/plots/Nodes/NodeSetup.png"
     # load in all the related values
-    grid, sections, nodes = loadSections()
+    if gridSetup == "old":
+        grid, sections, nodes = loadSections_Old()
+    else:
+        grid, sections, nodes = loadSections()
     habMap = HabitatMap()
     # plot variables
     fig = plt.figure()
     fig.set_size_inches(32, 18)
     ax = fig.add_subplot(111)
-    
+
     # for each node key we want to have a different color
     nodeKeys = list(nodes.keys())
     cmap = get_cmap(len(nodeKeys))
-    
+
     # plot each node as a different color, with its id 10 below
     for idx in range(len(nodeKeys)):
         curX = nodes[nodeKeys[idx]]["NodeUTMx"]
@@ -49,20 +52,19 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
         for j in range(len(grid[i])):
             # check if there is a value for dist to the right
             if j!=len(grid[j])-1 and grid[i][j][1]!=0:
-                ax.arrow(nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i][j][0]]["NodeUTMy"], nodes[grid[i][j+1][0]]["NodeUTMx"]-nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i][j+1][0]]["NodeUTMy"]-nodes[grid[i][j][0]]["NodeUTMy"], head_width=0.05, head_length=0.1, color="r", ls=':')       
+                ax.arrow(nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i][j][0]]["NodeUTMy"], nodes[grid[i][j+1][0]]["NodeUTMx"]-nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i][j+1][0]]["NodeUTMy"]-nodes[grid[i][j][0]]["NodeUTMy"], head_width=0.05, head_length=0.1, color="r", ls=':')
                 ax.text((nodes[grid[i][j+1][0]]["NodeUTMx"]+nodes[grid[i][j][0]]["NodeUTMx"])/2, (nodes[grid[i][j+1][0]]["NodeUTMy"]+nodes[grid[i][j][0]]["NodeUTMy"])/2, grid[i][j][1], fontsize=10, c='b',fontweight='heavy')
             # check if there is a value for the dist to the top
             if i!=0 and grid[i][j][2]!=0:
-                ax.arrow(nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i][j][0]]["NodeUTMy"], nodes[grid[i-1][j][0]]["NodeUTMx"]-nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i-1][j][0]]["NodeUTMy"]-nodes[grid[i][j][0]]["NodeUTMy"], head_width=0.05, head_length=0.1, color="r", ls=':')       
+                ax.arrow(nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i][j][0]]["NodeUTMy"], nodes[grid[i-1][j][0]]["NodeUTMx"]-nodes[grid[i][j][0]]["NodeUTMx"], nodes[grid[i-1][j][0]]["NodeUTMy"]-nodes[grid[i][j][0]]["NodeUTMy"], head_width=0.05, head_length=0.1, color="r", ls=':')
                 ax.text((nodes[grid[i-1][j][0]]["NodeUTMx"]+nodes[grid[i][j][0]]["NodeUTMx"])/2, (nodes[grid[i-1][j][0]]["NodeUTMy"]+nodes[grid[i][j][0]]["NodeUTMy"])/2, grid[i][j][2], fontsize=10, c='b',fontweight='heavy')
-    
+
     # if we're plotting the sections go through each and put the index in its center
     if plotSections:
         for i in range(len(sections)):
             ax.text((sections[i][0][0]+sections[i][1][0])/2, (sections[i][0][1]+sections[i][1][1])/2, i, fontsize=16, c='g',fontweight='heavy')
         # update the filepath accordingly to show for sections
         filePath = "/plots/Nodes/NodeSetupSections.png"
-    
     # if we're plotting the habitat polygons go through each and add a color scheme
     if plotHabitats:
         habColors = getSharpColors()
@@ -82,21 +84,21 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
     # add the axis labels and the title
     plt.xlabel("UTMx")
     plt.ylabel("UTMy")
-    
+
     if not isAllData:
         plt.title("The setup of the Node Grid")
         plt.savefig(os.getcwd()+filePath)
-    
+
     # if we're not just saving the file return the fig, ax, sections for further plotting
     return fig, ax, sections
 
-def plotGridWithPoints(data, isSections=True, plotHabitats=False, imposeLimits = True, colorScale:bool = False, useErrorBars: bool = False, errors: list = None, sameNodeColor: bool = False):
-    """ This takes in a list of data points to be plotted on the grid 
+def plotGridWithPoints(data, gridSetup="old", isSections=True, plotHabitats=False, imposeLimits = True, colorScale:bool = False, useErrorBars: bool = False, errors: list = None, sameNodeColor: bool = False):
+    """ This takes in a list of data points to be plotted on the grid
         and whether or not you want to see the sections in the grid too
         and plots accordingly """
     # Get the plot fig, ax and sections from plotNodes as a base
-    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True, sameNodeColor)
-    
+    fig, ax, sections = plotNodes(True,isSections, plotHabitats, True, sameNodeColor, gridSetup=gridSetup)
+
     # Normalize the scale of the color to the maximum error
     if colorScale:
         cmap = plt.cm.get_cmap('Greys')
@@ -122,7 +124,7 @@ def plotGridWithPoints(data, isSections=True, plotHabitats=False, imposeLimits =
                 minY = point[1]
             if point[1]>maxY:
                 maxY = point[1]
-        # plot accordingly - whether with just the points, 
+        # plot accordingly - whether with just the points,
         # error bars, or with the color scale
         if not colorScale:
             ax.scatter(point[0],point[1], c='black')
@@ -136,10 +138,10 @@ def plotGridWithPoints(data, isSections=True, plotHabitats=False, imposeLimits =
     # show the result
     plt.show()
 
-def plotAllData(month="June", isSections=True, plotHabitats=True, imposeLimits=True, combined=False, onlyOutside = False, sameNodeColor: bool = False):
+def plotAllData(gridSetup="old" ,month="June", isSections=True, plotHabitats=True, imposeLimits=True, combined=False, onlyOutside = False, sameNodeColor: bool = False):
     # load in a fig and ax with the node grid already displayed inplace
-    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True, sameNodeColor=sameNodeColor)
-    # set the file path based on month and whether we're including sections and whether 
+    fig, ax, sections = plotNodes(True, isSections, plotHabitats, True, sameNodeColor=sameNodeColor, gridSetup=gridSetup)
+    # set the file path based on month and whether we're including sections and whether
     # only we're showing values outside the grid
     filePath = "/plots/"+month+"/Data"
     if isSections:
@@ -170,7 +172,6 @@ def plotAllData(month="June", isSections=True, plotHabitats=True, imposeLimits=T
                 minY = utmVals[1]
             if utmVals[1]>maxY:
                 maxY = utmVals[1]
-            
         # if we only want to plot the outside values, check for the values in -1 sections
         if not onlyOutside:
             ax.scatter(utmVals[0],utmVals[1])
@@ -184,11 +185,7 @@ def plotAllData(month="June", isSections=True, plotHabitats=True, imposeLimits=T
 def plotOriginal(month="March", threshold=-90):
     print("Plotting " + month + " with " + str(threshold) + " as a threshold")
     redoUtm = False
-    if month == "March":
-        res = marchPredictions(threshold)
-    else:
-        res = junePredictions(threshold)
-        redoUtm= True
+    res = predictions(month=month)
     nodes = loadNodes(redoUtm)
     # removed the boundaries as hardset since
     # the first test is outside the bounds?
@@ -276,7 +273,6 @@ def main(args=None):
     rssiThreshold=-105.16
     if args.rssi!=None:
         rssiThreshold = args.rssi
-    
     if args.eq!=None and args.eq.lower()=='y':
         plotEquation()
     elif args.allData!=None and args.allData.lower()=='y':

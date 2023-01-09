@@ -2,8 +2,10 @@
     A file that contains functions related to exploratory data analysis.
 """
 import numpy as np
-import pandas as pd
-import math, multilat, utils, json, utm, datetime
+import utils
+import json, utm
+import multilat
+from vincenty import vincenty
 
 def closestNodeCount(month="March"):
     """ This function goes over the data, specified by month, and then compares the
@@ -101,6 +103,144 @@ def closestNodeCount(month="March"):
     print("Here is the dictionary of each node that was misclassified and the number of misclassifications they had with other nodes:")
     print(frequencyConfused)
 
+def orderedStrengths(saveFilteredDist=False, month="June"):
+    """
+        Using the new data, we bucket the errors to see how far off 
+        the distances are between [0,20], (20,50], (50,75], (75,100), (100, inf)
+        And we also save the distances and the signal strengths to graph on an x,y cartesian plot
+    """
+    pathName = "../Data/"+month+"/newData.json"
+    with open(pathName,"r") as f:
+        data = json.load(f)
+    X = []
+    y = data["y"]
+    #signal strength -> y values
+    signalStr = []
+    #drone distance from nodes -> x values
+    distances = []
+    #Bucket the errors - 0-20m, 21m-50m, 51m-75m, 75m-100m, 100m<
+    errors = [0,0,0,0,0]
+    #Loop through the items in data set X
+    for index, item in enumerate(data["X"]):
+        #Get the keys
+        keys = item["data"].keys()
+
+        #Loop through each item in X data set
+        newItems = {}
+        for key in keys:
+            if item["data"][key][2][0] < -102 or item["data"][key][2][0] > -73: continue
+            #Set pointA to be the location of the drone
+            pointA = (data["y"][index][0],data["y"][index][1])
+            pointB = (item["data"][key][1][0],item["data"][key][1][1])
+
+            #Exclude the useless data points
+            if(pointA == (0,0) or pointA == (0.754225181062586, -12.295563892977972) or pointA == (4.22356791831445, -68.85519277364834)): continue
+
+            # Using vincenty alorithm to calculate the distance between them in km
+            distance = vincenty(pointA, pointB)
+            #Convert into meters
+            distance = distance*1000
+
+            #Set the signal
+            distance = round(distance,2)
+            signal = item["data"][key][2][0]
+            
+            
+            distance_2 = round(utils.calculateDist_2(signal),2)
+            replace = [signal,distance,distance_2]
+            newItems[key] = replace
+
+            distances.append(distance)
+            signalStr.append(signal)
+        
+        # Now bucket the errors
+        sort_orders = sorted(newItems.items(), key=lambda x: x[1][1])
+        for i in sort_orders:
+            print(i[1])
+            print(i[1][1], i[1][2])
+            if(i[1][1] > i[1][2]):
+                err = i[1][1] - i[1][2]
+                if(i[1][0] > -73):
+                    print(i)
+                    print(sort_orders)
+                    input()
+            else:
+                err = i[1][2] - i[1][1]
+            if(err > 100):
+                if(errors[4] == 0):
+                    errors[4] = {}
+                    errors[4][i[1][0]] = 1
+                else:
+                    if(i[1][0] not in errors[4].keys()):
+                        errors[4][i[1][0]] = 1
+                    else:
+                        errors[4][i[1][0]] += 1
+            elif(err <= 100 and err >75):
+                if(errors[3] == 0):
+                    errors[3] = {}
+                    errors[3][i[1][0]] = 1
+                else:
+                    if(i[1][0] not in errors[3].keys()):
+                        errors[3][i[1][0]] = 1
+                    else:
+                        errors[3][i[1][0]] += 1
+            elif(err <=75 and err > 50):
+                if(errors[2] == 0):
+                    errors[2] = {}
+                    errors[2][i[1][0]] = 1
+                else:
+                    if(i[1][0] not in errors[2].keys()):
+                        errors[2][i[1][0]] = 1
+                    else:
+                        errors[2][i[1][0]] += 1
+            elif(err <=50 and err > 25):
+                if(errors[1] == 0):
+                    errors[1] = {}
+                    errors[1][i[1][0]] = 1
+                else:
+                    if(i[1][0] not in errors[1].keys()):
+                        errors[1][i[1][0]] = 1
+                    else:
+                        errors[1][i[1][0]] += 1
+            else:
+                if(errors[0] == 0):
+                    errors[0] = {}
+                    errors[0][i[1][0]] = 1
+                else:
+                    if(i[1][0] not in errors[0].keys()):
+                        errors[0][i[1][0]] = 1
+                    else:
+                        errors[0][i[1][0]] += 1
+            print(err)
+            print(errors)
+
+    #Make sure that the values are the same length; suitable for plotting
+    assert(len(signalStr) == len(distances))
+    finalData = {}
+    finalData['X']=distances
+    finalData['Y']=signalStr
+    if saveFilteredDist:
+        with open("../Data/June/newDataDistanceFiltered.json","w+") as f:
+            json.dump(finalData, f)
+
+def closest_to(number, numbers):
+    """ Helper function to find the two indices of the numbers closest to provided number """
+    values = []
+    for i in range(0,len(numbers)):
+        values.append(abs(numbers[i] - number))
+    mini_one = float('infinity')
+    mini_two = float('infinity')
+    one = 0
+    two = 0
+    for k in range(0,len(values)):
+        if(values[k] < mini_one):
+            mini_one = values[k]
+            one = k
+        if(values[k] < mini_two and mini_one != values[k]):
+            mini_two = values[k]
+            two = k
+    return one, two
+
 def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
     """
         This function will evaluate the overall accuracy of a provided RSSI->distance function.
@@ -158,7 +298,7 @@ def compareDistanceCalculator(distanceFunction,rssiThreshold=-105.16):
     print("Thus the function had a total overall average error of {} m".format((totalDistanceError[0]/totalDistanceError[1])))
 
 def dataGridSections(month="June"):
-    """ Check the frequency of the data from a given month in particular sectionsof the grid """
+    """ Check the frequency of the data from a given month in particular sections of the grid """
     # load in the varying values
     grid, sections, nodes = utils.loadSections()
     # get the lat longs of the month
@@ -166,7 +306,7 @@ def dataGridSections(month="June"):
     # Initialize the frequency map for each key
     sectionFrequency = {}
     for i in range(len(sections.keys())):
-        sectionFrequency[i] = 0 
+        sectionFrequency[i] = 0
     # -1 will refer to if data point is outside the grid
     sectionFrequency[-1] = 0
     # go through all the lat longs and determine the section
@@ -182,10 +322,10 @@ def dataGridSections(month="June"):
         print("\t{}:{}".format(sectionKey, sectionFrequency[sectionKey]))
 
 def findAvgTrueError(verbose = False):
-    """ Given all the actual distances to the nodes, 
+    """ Given all the actual distances to the nodes,
         calculate multilat and determine the error """
     # Loads in data where the X is the calculated dist to each node
-    # and y is the actul dist to each node
+    # and y is the actual dist to each node
     X, y = utils.loadRSSModelData(month = "June")
     # Generate the node locations in a list
     nodes = utils.loadNodes(True)
@@ -193,7 +333,6 @@ def findAvgTrueError(verbose = False):
     nodeLocs = []
     for key in nodeKeys:
         nodeLocs.append([nodes[key]["NodeUTMx"],nodes[key]["NodeUTMy"]])
-    
     errors = [0,0]
     for i in range(len(X)):
         # get a given row of data
@@ -202,7 +341,7 @@ def findAvgTrueError(verbose = False):
             # if the node had data to a batch, set it to the actual distance
             if tmp_distances[j]!=0:
                 tmp_distances[j] = y[i][j]
-        # calculate the estimated & actual multilats 
+        # calculate the estimated & actual multilats
         estimated = np.array(multilat.gps_solve(tmp_distances, list(np.array(nodeLocs))))
         actual = np.array(multilat.gps_solve(y[i], list(np.array(nodeLocs))))
         # find the difference in the predicted location
@@ -215,4 +354,4 @@ def findAvgTrueError(verbose = False):
     print(errors[0]/errors[1])
 
 if __name__=="__main__":
-    findAvgTrueError()
+    dataGridSections()

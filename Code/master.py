@@ -1,13 +1,12 @@
+"""
+        This file is going to serve as the master code to run the whole data prediction with different models
+"""
 
 from multilat import predictions
 from model import rmseModel
 import csv
 import argparse
 
-
-"""
-        This file is going to serve as the master code to run the whole data prediction with different models
-"""
 
 def SM(month="June", rssiThreshold=-102):
     """

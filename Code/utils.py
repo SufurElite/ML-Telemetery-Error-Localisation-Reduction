@@ -19,9 +19,9 @@ import random
 import csv
 
 def loadNodes(rewriteUTM=False):
-    """ 
-        Loads in the nodes from the CSV and returns it 
-        as a dictionary where the key is its NodeId 
+    """
+        Loads in the nodes from the CSV and returns it
+        as a dictionary where the key is its NodeId
     """
     # Load in the data from the CSV using pandas
     df = pd.read_csv(r'../Data/Nodes.csv')
@@ -71,9 +71,9 @@ def newNodes_tocsv():
             writer.writerow(nodes[node])
 
 def distBetweenNodes(node1, node2, Nodes):
-    """  
-        Given 2 node ids and a dictionary of nodes this 
-        will calculate the distance between the two 
+    """
+        Given 2 node ids and a dictionary of nodes this
+        will calculate the distance between the two
     """
     node1Loc = np.array([np.float64(Nodes[node1]["NodeUTMx"]), np.float64(Nodes[node1]["NodeUTMy"])])
     node2Loc = np.array([np.float64(Nodes[node2]["NodeUTMx"]),np.float64(Nodes[node2]["NodeUTMy"])])
@@ -81,7 +81,7 @@ def distBetweenNodes(node1, node2, Nodes):
     return dist
 
 def loadSections():
-    """ 
+    """
         New grid sections, same thing as for loadSections just a few modifications
             -Not a perfect square
             -More nodes
@@ -142,9 +142,9 @@ def loadSections():
     return grid, sections, nodes
 
 def loadSections_Old():
-    """ 
+    """
         Will create a dictionary of section # to coordinates of
-        each square formed within the grid 
+        each square formed within the grid
     """
 
     nodes = loadNodes(True)
@@ -205,9 +205,9 @@ def loadSections_Old():
     return grid, sections, nodes
 
 def pointToSection(dataPointX, dataPointY, sections):
-    """ 
+    """
         Given a UTM X, Y value and the section dictionary with the bounds defined,
-        return which x and y value it falls in 
+        return which x and y value it falls in
     """
     # go over all the sections and if the X & Y values lie wtihin the sections bound, then return i
     for i in range(len(sections)):
@@ -217,7 +217,7 @@ def pointToSection(dataPointX, dataPointY, sections):
     return -1
 
 def convertOldUtm(oldUTMx,oldUTMy, oldNodes=[], newNodes=[]):
-    """ 
+    """
         This function will take in a March TestInfo UTMx and convert it
         to a UTM relative to the new UTM nodes
     """
@@ -289,10 +289,10 @@ def loadCovariateModel():
     return loadedModel
 
 def loadData(month="March", pruned=False, isTrilat = False, optMultilat = False):
-    """ 
+    """
         Loads the data that has been stored from associateTestData,
         month specifies the month the data was taken happened (March or June)
-        by default is March 
+        by default is March
     """
     pathName = "../Data/"+month+"/associatedTestData"
     if pruned:
@@ -314,9 +314,9 @@ def loadData(month="March", pruned=False, isTrilat = False, optMultilat = False)
     return data
 
 def loadCovariateData():
-    """ 
+    """
         Using the additional features from the march data,
-        initially we can try using ordinal number values for the habitats 
+        initially we can try using ordinal number values for the habitats
     """
 
     # load in the habitat map
@@ -404,7 +404,7 @@ def loadCovariateData():
     return X, y
 
 def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, optMultilat=False, otherMultilat=False):
-    """ 
+    """
         This is similar to loading model data, but the y values, instead of being offsets to correct
         the error derived from multilat, are the distances to each node
     """
@@ -475,7 +475,7 @@ def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, op
     return X,y
 
 def loadModelData(month="June", modelType="initial", threshold=-102, includeCovariatePred = False, verbose=True, isTrilat = False, optMultilat=False, otherMultilat=False):
-    """ 
+    """
         Unlike the regular loadData function, this one presents the information in a format
         specifically for a model to train on. The way the data will differ depends on if it's initial
         (where we'll be trying to predict offsets of the calculated values) or if it's sequential, given
@@ -553,10 +553,10 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
     return X, y
 
 def associateMarchData(month="March"):
-    """ 
+    """
         This function currently only works for March but ideally will be refactored to be generic
         for March or for the June data given a month as a parameter, and it associates the TestIds
-        and its data with the rows 
+        and its data with the rows
     """
 
     # Load in both the test info and beepData into a dataframe
@@ -645,7 +645,7 @@ def associateMarchData(month="March"):
 
 def rewriteMarchData(month="March"):
     """
-        This loads in the march associated test data and rewrites it so that it is 
+        This loads in the march associated test data and rewrites it so that it is
         already separated into an X,y and is not done by the individual trial.
     """
     pathName = "../Data/"+month+"/associatedTestData.json"
@@ -694,8 +694,8 @@ def rewriteMarchData(month="March"):
         json.dump(finalData, f)
 
 def associateJuneData(newData = False, newGrid = False):
-    """ 
-        This function currently only works for June but ideally will be refactored 
+    """
+        This function currently only works for June but ideally will be refactored
         with the March and October function. It associates the TestIds and its data with the rows
     """
 
@@ -748,7 +748,7 @@ def associateJuneData(newData = False, newGrid = False):
         currDate = row[1]['Time.local']
         #Changing NodeId - because NewData needs to find the NodeID
         if row[1]['NodeId']=="3288000000": row[1]['NodeId']="3288e6"
-        
+
         if baseTime == '0':
             batch = {}
             baseTime = currDate
@@ -963,7 +963,7 @@ def associateOctoberData(newData=False):
                 batch[row[1]['NodeId']]=[0,0]
             batch[row[1]['NodeId']][0]+=1
             batch[row[1]['NodeId']][1]+=row[1]['TagRSSI']
-            
+
     # every x should have a corresponding y
     assert(len(X)==len(y))
     finalData = {}
@@ -978,6 +978,27 @@ def associateOctoberData(newData=False):
     print(missedTheCut,missedTheCutTooFew,missedthecutbadSort)
     print(errorDist)
     print("There were {} rows,\nof which there were {} 2 second intervals/batches with relevant data,\naveraging {} rows a batch".format(len(beepData),avgNums[0],(avgNums[1]/avgNums[0])))
+
+def getPlotValues(results, month):
+    """
+        Function that helps getting the plot values out of the results variable from the master.py when run with simple multilat.
+    """
+    allErrors = []
+    errorLocs = []
+    errorDirections = []
+    if month=="June" or month=="March":
+        gridS = "old"
+    else:
+        gridS = "new"
+
+    for id in results:
+        #Storing values for plotting
+        allErrors.append(results[id]["error"])
+        errorLocs.append([results[id]["gt"][0], results[id]["gt"][1]])
+        errorDirections.append([results[id]["res"][0]-results[id]["gt"][0], results[id]["res"][1]-results[id]["gt"][1]])
+    return allErrors, errorLocs, errorDirections, gridS
+
+
 
 def newEquationData(month="June"):
     """
@@ -1038,7 +1059,7 @@ def newEquationData(month="June"):
 
 def deriveEquation(month="June"):
     """
-        Determine the exponential equation to approximate signal strength 
+        Determine the exponential equation to approximate signal strength
         from a given month's set of values
     """
     #Open the newEquationData file, rune newEquationData to get it
@@ -1102,7 +1123,7 @@ def calculateDist_2(RSSI):
             Old values:
                 29.856227966632954, -0.0054824231026629686, -102.84339991053513
     """
-    
+
     dist = np.log((RSSI+102.48720932300988)/29.797940785785794)/-0.00568791789392432
     return dist
 

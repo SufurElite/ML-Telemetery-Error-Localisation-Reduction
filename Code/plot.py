@@ -137,7 +137,8 @@ def plotGridWithPoints(data, gridSetup="old", isSections=True, plotHabitats=Fals
         plt.xlim((minX-50,maxX+50))
         plt.ylim((minY-50, maxY+50))
     # show the result
-    plt.show()
+    #plt.show()
+    return plt
 
 def plotAllData(gridSetup="old" ,month="June", isSections=True, plotHabitats=True, imposeLimits=True, combined=False, onlyOutside = False, sameNodeColor: bool = False):
     # load in a fig and ax with the node grid already displayed inplace

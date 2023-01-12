@@ -188,12 +188,12 @@ def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, s
     # determine whether to plot all the error locations
     if plotError:
         if useErrorBars:
-            plotGridWithPoints(errorLocs,gridSetup=gridS,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=True, errors=errorDirections, sameNodeColor=sameNodeColor)
+            plt = plotGridWithPoints(errorLocs,gridSetup=gridS,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=True, errors=errorDirections, sameNodeColor=sameNodeColor)
         elif useColorScale:
-            plotGridWithPoints(errorLocs,gridSetup=gridS,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = True, errors=allErrors, sameNodeColor=sameNodeColor)
+            plt = plotGridWithPoints(errorLocs,gridSetup=gridS,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = True, errors=allErrors, sameNodeColor=sameNodeColor)
         else:
-            plotGridWithPoints(errorLocs,gridSetup=gridS,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = False, errors=None, sameNodeColor=sameNodeColor)
-    return results
+            plt = plotGridWithPoints(errorLocs,gridSetup=gridS,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = False, errors=None, sameNodeColor=sameNodeColor)
+    return results, plt
 
 def covariateTrain(saveModel=False, randomForest=True):
     """ Creates a Classifier to determine the habitat given the signals in a particular location,
@@ -251,7 +251,7 @@ def ANNDistanceModel(save = False):
     for i in range(len(tmp_X)):
         X.append([tmp_X[i]])
     X = np.array(X)
-    
+
     # Split the data create a classifier
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
     clf= MLPRegressor(hidden_layer_sizes=(8,6,4), max_iter=10000,activation='relu',solver='adam', random_state=1)

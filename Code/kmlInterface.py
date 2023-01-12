@@ -19,14 +19,12 @@ class Habitat():
         self.pointsList = []
         self.polygons = []
         self.habitat_title = habitat_title
-
     def addPolygon(self, points: list):
         """
             Add a new polygon to the habitats from the point list
         """
         self.pointsList.append(points)
         self.polygons.append(Polygon(points))
-
     def isInside(self, x, y):
         """
             Checks whether the x,y value is inside any of the habitats polygons
@@ -77,7 +75,6 @@ class HabitatMap():
             currHabitat.addPolygon(points)
 
         return currHabitat
-
     def whichHabitat(self, UTMx, UTMy):
         """
             Takes in a UTMx, UTMy value pair and determines which habitat
@@ -94,7 +91,6 @@ class HabitatMap():
             Takes in a habitat title and returns its associated Habitat object
         """
         return self.habitats[self.HABITAT_TYPES.index(habitat_title)]
-
     def getHabitats(self):
         return self.HABITAT_TYPES
 

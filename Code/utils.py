@@ -4,10 +4,7 @@
 """
 import pandas as pd
 import numpy as np
-import json, utm
-import datetime
-import multilat
-import math
+import multilat, json, utm, datetime, random, math, pickle
 from vincenty import vincenty
 from scipy.optimize import curve_fit
 import pickle
@@ -229,7 +226,6 @@ def convertOldUtm(oldUTMx,oldUTMy, oldNodes=[], newNodes=[]):
         oldNodes = loadNodes()
     if newNodes == []:
         newNodes = loadNodes(True)
-
     # calculate the relative distance to each of the old nodes, but save
     # the location from the new nodes, and then calculate the new utmx, utmy
     oldNodeDists = []
@@ -335,7 +331,6 @@ def loadCovariateData():
 
     X = []
     y = []
-
     for key in data.keys():
         # convert the old utm values to new
         convertedUTMx, convertedUTMy = convertOldUtm(data[key]["GroundTruth"]["TestUTMx"],data[key]["GroundTruth"]["TestUTMy"],oldNodes,newNodes)
@@ -355,7 +350,6 @@ def loadCovariateData():
         for i in range(len(tmp_x)):
             if tmp_x[i][1]==0:continue
             x[i]=tmp_x[i][0]/tmp_x[i][1]
-
         y.append(habIdx)
         X.append(x)
         if habitatName not in habitatDist:
@@ -369,7 +363,6 @@ def loadCovariateData():
     juneX = juneData["X"]
     june_y = juneData["y"]
     assert(len(juneX)==len(june_y))
-
     for i in range(len(juneX)):
         # get the june utm values
         juneUTM = utm.from_latlon(june_y[i][0], june_y[i][1])
@@ -377,7 +370,6 @@ def loadCovariateData():
         habIdx, habitatName = habitatMap.whichHabitat(juneUTM[0], juneUTM[1])
 
         if habIdx==-1: continue
-
         tmp_x = [0 for i in range(len(nodes))]
         for nodeEntry in juneX[i]["data"].keys():
             nodeKey = nodeEntry
@@ -462,7 +454,6 @@ def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, op
             #habitatPred, habitat_title = habitatMap.whichHabitat(tagGt[0], tagGt[1])
             #if habitatPred==-1:
             habitatPred = covariateModel.predict(np.array([signal_X]))[0]
-
             tmp_x[0] = habitatPred
         X.append(tmp_x)
         y.append(tmp_y)
@@ -519,7 +510,7 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
         x[0] = res[entry]["res"][0]
         x[1] = res[entry]["res"][1]
         tmp_y = res[entry]["gt"]-res[entry]["res"]
-
+        
         tmp_y[0] = round(tmp_y[0],1)
         tmp_y[1] = round(tmp_y[1],1)
 

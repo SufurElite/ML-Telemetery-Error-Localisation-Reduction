@@ -65,7 +65,6 @@ def plotNodes(rewriteUTM=True, plotSections=True, plotHabitats = False, isAllDat
             ax.text((sections[i][0][0]+sections[i][1][0])/2, (sections[i][0][1]+sections[i][1][1])/2, i, fontsize=16, c='g',fontweight='heavy')
         # update the filepath accordingly to show for sections
         filePath = "/plots/Nodes/NodeSetupSections.png"
-
     # if we're plotting the habitat polygons go through each and add a color scheme
     if plotHabitats:
         habColors = getSharpColors()
@@ -174,7 +173,6 @@ def plotAllData(gridSetup="old" ,month="June", isSections=True, plotHabitats=Tru
                 minY = utmVals[1]
             if utmVals[1]>maxY:
                 maxY = utmVals[1]
-
         # if we only want to plot the outside values, check for the values in -1 sections
         if not onlyOutside:
             ax.scatter(utmVals[0],utmVals[1])
@@ -276,7 +274,6 @@ def main(args=None):
     rssiThreshold=-105.16
     if args.rssi!=None:
         rssiThreshold = args.rssi
-
     if args.eq!=None and args.eq.lower()=='y':
         plotEquation()
     elif args.allData!=None and args.allData.lower()=='y':

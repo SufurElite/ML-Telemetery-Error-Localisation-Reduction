@@ -16,9 +16,9 @@ import random
 import csv
 
 def loadNodes(rewriteUTM=False):
-    """ 
-        Loads in the nodes from the CSV and returns it 
-        as a dictionary where the key is its NodeId 
+    """
+        Loads in the nodes from the CSV and returns it
+        as a dictionary where the key is its NodeId
     """
     # Load in the data from the CSV using pandas
     df = pd.read_csv(r'../Data/Nodes.csv')
@@ -68,9 +68,9 @@ def newNodes_tocsv():
             writer.writerow(nodes[node])
 
 def distBetweenNodes(node1, node2, Nodes):
-    """  
-        Given 2 node ids and a dictionary of nodes this 
-        will calculate the distance between the two 
+    """
+        Given 2 node ids and a dictionary of nodes this
+        will calculate the distance between the two
     """
     node1Loc = np.array([np.float64(Nodes[node1]["NodeUTMx"]), np.float64(Nodes[node1]["NodeUTMy"])])
     node2Loc = np.array([np.float64(Nodes[node2]["NodeUTMx"]),np.float64(Nodes[node2]["NodeUTMy"])])
@@ -78,7 +78,7 @@ def distBetweenNodes(node1, node2, Nodes):
     return dist
 
 def loadSections():
-    """ 
+    """
         New grid sections, same thing as for loadSections just a few modifications
             -Not a perfect square
             -More nodes
@@ -134,14 +134,14 @@ def loadSections():
             maxX = max(maxX,nodes[grid[i+1][j+1][0]]["NodeUTMx"])
             maxY = max(maxY,nodes[grid[i][j+1][0]]["NodeUTMy"])
 
-            sections[i*3+j] = [(minX,minY),(maxX, maxY)]
+            sections[i*(length-1)+j] = [(minX,minY),(maxX, maxY)]
 
     return grid, sections, nodes
 
 def loadSections_Old():
-    """ 
+    """
         Will create a dictionary of section # to coordinates of
-        each square formed within the grid 
+        each square formed within the grid
     """
 
     nodes = loadNodes(True)
@@ -197,14 +197,14 @@ def loadSections_Old():
             maxX = max(maxX,nodes[grid[i+1][j+1][0]]["NodeUTMx"])
             maxY = max(maxY,nodes[grid[i][j+1][0]]["NodeUTMy"])
 
-            sections[i*3+j] = [(minX,minY),(maxX, maxY)]
+            sections[i*(length-1)+j] = [(minX,minY),(maxX, maxY)]
 
     return grid, sections, nodes
 
 def pointToSection(dataPointX, dataPointY, sections):
-    """ 
+    """
         Given a UTM X, Y value and the section dictionary with the bounds defined,
-        return which x and y value it falls in 
+        return which x and y value it falls in
     """
     # go over all the sections and if the X & Y values lie wtihin the sections bound, then return i
     for i in range(len(sections)):
@@ -214,11 +214,10 @@ def pointToSection(dataPointX, dataPointY, sections):
     return -1
 
 def convertOldUtm(oldUTMx,oldUTMy, oldNodes=[], newNodes=[]):
-    """ 
+    """
         This function will take in a March TestInfo UTMx and convert it
         to a UTM relative to the new UTM nodes
     """
-
     oldUTMs = np.array([np.float64(oldUTMx),np.float64(oldUTMy)])
 
     # load in the new and old nodes
@@ -279,16 +278,19 @@ def loadBoundaries(redoUtm=False):
             minY = nodes[node]["NodeUTMy"]
     return minX,maxX,minY,maxY
 
-def loadCovariateModel():
+def loadCovariateModel(month="June"):
     """ Used to load in the Classifier for the prediction model """
-    loadedModel = pickle.load(open("models/covariateClf", 'rb'))
+    if month=="June" or month=="March":
+        loadedModel = pickle.load(open("models/covariateClf_Og", 'rb'))
+    else:
+        loadedModel = pickle.load(open("models/covariateClf", 'rb'))
     return loadedModel
 
 def loadData(month="March", pruned=False, isTrilat = False, optMultilat = False):
-    """ 
+    """
         Loads the data that has been stored from associateTestData,
         month specifies the month the data was taken happened (March or June)
-        by default is March 
+        by default is March
     """
     pathName = "../Data/"+month+"/associatedTestData"
     if pruned:
@@ -310,17 +312,19 @@ def loadData(month="March", pruned=False, isTrilat = False, optMultilat = False)
     return data
 
 def loadCovariateData():
-    """ 
+    """
         Using the additional features from the march data,
-        initially we can try using ordinal number values for the habitats 
+        initially we can try using ordinal number values for the habitats
     """
 
     # load in the habitat map
     habitatMap = HabitatMap()
-    data = loadData("March")
+    #data = loadData("March")
+    with open("../Data/March/associatedTestData.json", "r") as f:
+        data = json.load(f)
     # Load old and new node data for converting the old UTMs to new
     oldNodes = loadNodes()
-    newNodes = loadNodes(True)
+    newNodes = loadNodes_46()
     """ Will create a dictionary of the locations from the march associated Test Data gt
         and then any points from june that falls into a radius of 10m (arbitrarily chosen)
             - if there are multiple points within this radius, the closest one will be selected as
@@ -360,10 +364,10 @@ def loadCovariateData():
     print("From the march data, X has {} and y has {} values".format(len(X),len(y)))
     # now load in the June data
     juneData = loadData(month="June")
-    juneX = juneData["X"]
+    june_X = juneData["X"]
     june_y = juneData["y"]
-    assert(len(juneX)==len(june_y))
-    for i in range(len(juneX)):
+    assert(len(june_X)==len(june_y))
+    for i in range(len(june_X)):
         # get the june utm values
         juneUTM = utm.from_latlon(june_y[i][0], june_y[i][1])
         # use the habitat index to determine the value
@@ -371,18 +375,43 @@ def loadCovariateData():
 
         if habIdx==-1: continue
         tmp_x = [0 for i in range(len(nodes))]
-        for nodeEntry in juneX[i]["data"].keys():
+        for nodeEntry in june_X[i]["data"].keys():
             nodeKey = nodeEntry
             if nodeKey=="3288000000": nodeKey="3288e6"
             nodeIdx = nodes.index(nodeKey)
             assert(nodeKey==nodes[nodeIdx])
-            tmp_x[nodeIdx]=juneX[i]["data"][nodeEntry]
+            tmp_x[nodeIdx]=june_X[i]["data"][nodeEntry]
         X.append(tmp_x)
         y.append(habIdx)
         if habitatName not in habitatDist:
             habitatDist[habitatName] = 0
         habitatDist[habitatName]+=1
+    assert(len(X)==len(y))
+    print("After the june data, X has {} and y has {} values".format(len(X),len(y)))
+    # now load in the June data
+    octData = loadData(month="October")
+    oct_X = octData["X"]
+    oct_y = octData["y"]
+    assert(len(oct_X)==len(oct_y))
+    for i in range(len(oct_X)):
+        # get the june utm values
+        octUTM = utm.from_latlon(oct_y[i][0], oct_y[i][1])
+        # use the habitat index to determine the value
+        habIdx, habitatName = habitatMap.whichHabitat(octUTM[0], octUTM[1])
 
+        if habIdx==-1: continue
+        tmp_x = [0 for i in range(len(nodes))]
+        for nodeEntry in oct_X[i]["data"].keys():
+            nodeKey = nodeEntry
+            if nodeKey=="3288000000": nodeKey="3288e6"
+            nodeIdx = nodes.index(nodeKey)
+            assert(nodeKey==nodes[nodeIdx])
+            tmp_x[nodeIdx]=oct_X[i]["data"][nodeEntry]
+        X.append(tmp_x)
+        y.append(habIdx)
+        if habitatName not in habitatDist:
+            habitatDist[habitatName] = 0
+        habitatDist[habitatName]+=1
     print("After applying the covariate habitat map, X has {} and y has {} values".format(len(X),len(y)))
 
     print("The distribution of habitat values is ")
@@ -396,7 +425,7 @@ def loadCovariateData():
     return X, y
 
 def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, optMultilat=False, otherMultilat=False):
-    """ 
+    """
         This is similar to loading model data, but the y values, instead of being offsets to correct
         the error derived from multilat, are the distances to each node
     """
@@ -405,14 +434,17 @@ def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, op
     covariateModel = None
     habitatMap = HabitatMap()
     if includeCovariatePred:
-        covariateModel = loadCovariateModel()
+        covariateModel = loadCovariateModel(month=month)
     # load in the data
     data = loadData(month,isTrilat=isTrilat,optMultilat=optMultilat)
     X_vals = data["X"]
     y_vals = data["y"]
     assert(len(X_vals)==len(y_vals))
     # load in the nodes
-    nodes = loadNodes(rewriteUTM=True)
+    if month=="June" or month=="March":
+        nodes = loadNodes(rewriteUTM=True)
+    else:
+        nodes = loadNodes_46()
     nodeKeys = list(nodes.keys())
     xInputNum = len(nodeKeys)
     # starting idx is either 0 or 1 if we include the habitat,
@@ -466,7 +498,7 @@ def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, op
     return X,y
 
 def loadModelData(month="June", modelType="initial", threshold=-102, includeCovariatePred = False, verbose=True, isTrilat = False, optMultilat=False, otherMultilat=False):
-    """ 
+    """
         Unlike the regular loadData function, this one presents the information in a format
         specifically for a model to train on. The way the data will differ depends on if it's initial
         (where we'll be trying to predict offsets of the calculated values) or if it's sequential, given
@@ -474,7 +506,7 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
     """
     covariateModel = None
     if includeCovariatePred:
-        covariateModel = loadCovariateModel()
+        covariateModel = loadCovariateModel(month=month)
     if month=="June":
         res = multilat.predictions(threshold,keepNodeIds=True, isTrilat=isTrilat, optMultilat=optMultilat,month="June", otherMultilat=otherMultilat)
     elif(month == "March"):
@@ -486,8 +518,12 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
     if month=="June":
         rewriteUtm = True
 
-    nodes = loadNodes(rewriteUTM=rewriteUtm)
-    notUsed, sections, _ = loadSections()
+    if month=="June" or month == "March":
+        nodes = loadNodes(rewriteUTM=rewriteUtm)
+        notUsed, sections, _ = loadSections_Old()
+    else:
+        nodes = loadNodes_46()
+
 
     # the input to the model is going to be the calculated distance to each node
     # plus the projected output
@@ -510,7 +546,7 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
         x[0] = res[entry]["res"][0]
         x[1] = res[entry]["res"][1]
         tmp_y = res[entry]["gt"]-res[entry]["res"]
-        
+
         tmp_y[0] = round(tmp_y[0],1)
         tmp_y[1] = round(tmp_y[1],1)
 
@@ -544,10 +580,10 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
     return X, y
 
 def associateMarchData(month="March"):
-    """ 
+    """
         This function currently only works for March but ideally will be refactored to be generic
         for March or for the June data given a month as a parameter, and it associates the TestIds
-        and its data with the rows 
+        and its data with the rows
     """
 
     # Load in both the test info and beepData into a dataframe
@@ -636,7 +672,7 @@ def associateMarchData(month="March"):
 
 def rewriteMarchData(month="March"):
     """
-        This loads in the march associated test data and rewrites it so that it is 
+        This loads in the march associated test data and rewrites it so that it is
         already separated into an X,y and is not done by the individual trial.
     """
     pathName = "../Data/"+month+"/associatedTestData.json"
@@ -656,6 +692,7 @@ def rewriteMarchData(month="March"):
                 test = data[key][id]["TestId"]
                 posX = data[key][id]["TestUTMx"]
                 posY = data[key][id]["TestUTMy"]
+                newUTMx, newUTMy = convertOldUtm(posX, posY)
             if id == "Data":
                 information = {}
                 for item in data[key][id]:
@@ -676,7 +713,7 @@ def rewriteMarchData(month="March"):
                         #"testId" = test
                         "data" : information
         })
-        Y.append([posX,posY])
+        Y.append([newUTMx,newUTMy])
     assert(len(X) == len(Y))
     finalData = {}
     finalData['X']=X
@@ -685,8 +722,8 @@ def rewriteMarchData(month="March"):
         json.dump(finalData, f)
 
 def associateJuneData(newData = False, newGrid = False):
-    """ 
-        This function currently only works for June but ideally will be refactored 
+    """
+        This function currently only works for June but ideally will be refactored
         with the March and October function. It associates the TestIds and its data with the rows
     """
 
@@ -739,7 +776,7 @@ def associateJuneData(newData = False, newGrid = False):
         currDate = row[1]['Time.local']
         #Changing NodeId - because NewData needs to find the NodeID
         if row[1]['NodeId']=="3288000000": row[1]['NodeId']="3288e6"
-        
+
         if baseTime == '0':
             batch = {}
             baseTime = currDate
@@ -831,20 +868,29 @@ def associateJuneData(newData = False, newGrid = False):
     print(errorDist)
     print("There were {} rows,\nof which there were {} 2 second intervals/batches with relevant data,\naveraging {} rows a batch".format(len(beepData),avgNums[0],(avgNums[1]/avgNums[0])))
 
-def associateOctoberData(newData=False):
+def associateOctoberData(newData=False, walking=False):
     """
         Associates the October data to be in the same format as the other associated test data.
 
         [Should be refactored for only one associated month data function.]
     """
     nodeLocations = loadNodes_46()
-    #Load the October data
-    beepData = pd.read_csv(r'../Data/October/BeepData.csv')
-    #Sorting the values again, same as before
-    beepData.sort_values(by = ['TagId', 'Time.local'], axis=0, ascending=[False, True], inplace=True, ignore_index=True, key=None)
+    if(walking == False):
+        #Load the October data
+        beepData = pd.read_csv(r'../Data/October/BeepData.csv')
+        #Sorting the values again, same as before
+        beepData.sort_values(by = ['TagId', 'Time.local'], axis=0, ascending=[False, True], inplace=True, ignore_index=True, key=None)
 
-    flightDF = pd.read_csv(r'../Data/October/drone_flights_edited.csv', index_col=None, header=0)
-    flightDF['ModifyDate'] = pd.to_datetime(flightDF['ModifyDate'], format="%Y:%m:%d %H:%M:%S")
+        flightDF = pd.read_csv(r'../Data/October/drone_flights_edited.csv', index_col=None, header=0)
+        flightDF['ModifyDate'] = pd.to_datetime(flightDF['ModifyDate'], format="%Y:%m:%d %H:%M:%S")
+    else:
+        #Load the October data
+        beepData = pd.read_csv(r'../Data/October/BeepData.csv')
+        #Sorting the values again, same as before
+        beepData.sort_values(by = ['TagId', 'Time.local'], axis=0, ascending=[False, True], inplace=True, ignore_index=True, key=None)
+
+        flightDF = pd.read_csv(r'../Data/October/walking_tests_edited.csv', index_col=None, header=0)
+        flightDF['ModifyDate'] = pd.to_datetime(flightDF['ModifyDate'], format="%Y-%m-%dT%H:%M:%SZ")
 
     # X will be composed of batches of data
     X = []
@@ -879,8 +925,10 @@ def associateOctoberData(newData=False):
                 print(baseTime)
                 print(upperBound)
                 print(tag)
-
+            print(flightDF)
+            print(nBaseTime, nUpperBound)
             timeSort = flightDF[flightDF['ModifyDate'].between(nBaseTime.strftime("%Y-%m-%d %H:%M:%S"),nUpperBound.strftime("%Y-%m-%d %H:%M:%S"))]
+            print(timeSort)
 
             # then sort the above timeSorted data by the relevant test tag id
             tagSort = timeSort[timeSort['tag_id'].str.contains(tag)]
@@ -954,21 +1002,50 @@ def associateOctoberData(newData=False):
                 batch[row[1]['NodeId']]=[0,0]
             batch[row[1]['NodeId']][0]+=1
             batch[row[1]['NodeId']][1]+=row[1]['TagRSSI']
-            
+
     # every x should have a corresponding y
     assert(len(X)==len(y))
     finalData = {}
     finalData['X']=X
     finalData['y']=y
-    if(newData == True):
-        with open("../Data/October/newData.json","w+") as f:
-            json.dump(finalData, f)
+    if(walking == False):
+        if(newData == True):
+            with open("../Data/October/newData.json","w+") as f:
+                json.dump(finalData, f)
+        else:
+            with open("../Data/October/associatedTestData.json","w+") as f:
+                json.dump(finalData, f)
     else:
-        with open("../Data/October/associatedTestData.json","w+") as f:
-            json.dump(finalData, f)
+        if(newData == True):
+            with open("../Data/October_2/newData.json","w+") as f:
+                json.dump(finalData, f)
+        else:
+            with open("../Data/October_2/associatedTestData.json", "w+") as f:
+                json.dump(finalData, f)
     print(missedTheCut,missedTheCutTooFew,missedthecutbadSort)
     print(errorDist)
     print("There were {} rows,\nof which there were {} 2 second intervals/batches with relevant data,\naveraging {} rows a batch".format(len(beepData),avgNums[0],(avgNums[1]/avgNums[0])))
+
+def getPlotValues(results, month):
+    """
+        Function that helps getting the plot values out of the results variable from the master.py when run with simple multilat.
+    """
+    allErrors = []
+    errorLocs = []
+    errorDirections = []
+    if month=="June" or month=="March":
+        gridS = "old"
+    else:
+        gridS = "new"
+
+    for id in results:
+        #Storing values for plotting
+        allErrors.append(results[id]["error"])
+        errorLocs.append([results[id]["gt"][0], results[id]["gt"][1]])
+        errorDirections.append([results[id]["res"][0]-results[id]["gt"][0], results[id]["res"][1]-results[id]["gt"][1]])
+    return allErrors, errorLocs, errorDirections, gridS
+
+
 
 def newEquationData(month="June"):
     """
@@ -1029,7 +1106,7 @@ def newEquationData(month="June"):
 
 def deriveEquation(month="June"):
     """
-        Determine the exponential equation to approximate signal strength 
+        Determine the exponential equation to approximate signal strength
         from a given month's set of values
     """
     #Open the newEquationData file, rune newEquationData to get it
@@ -1093,7 +1170,7 @@ def calculateDist_2(RSSI):
             Old values:
                 29.856227966632954, -0.0054824231026629686, -102.84339991053513
     """
-    
+
     dist = np.log((RSSI+102.48720932300988)/29.797940785785794)/-0.00568791789392432
     return dist
 
@@ -1105,4 +1182,6 @@ def calculateDist(RSSI):
 
 
 if __name__=="__main__":
-    print(deriveEquation(month="October"))
+    #print(deriveEquation(month="October"))
+    associateOctoberData(newData=False, walking=True)
+    #rewriteMarchData()

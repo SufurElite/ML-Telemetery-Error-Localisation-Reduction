@@ -61,7 +61,7 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTrilat = False, optMu
     if(month =="March"):
         #Load March - new JSON
         data = utils.loadData(month="March",isTrilat=isTrilat, optMultilat=optMultilat)
-        nodes = utils.loadNodes(rewriteUTM=False)
+        nodes = utils.loadNodes(rewriteUTM=True)
     if(month == "October"):
         data = utils.loadData(month="October",isTrilat=isTrilat, optMultilat=optMultilat)
         nodes = utils.loadNodes_46()
@@ -145,6 +145,8 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTrilat = False, optMu
             results[testId]["nodeIds"] = nodesTargeted
         averageError+=dist
         numberOfTests+=1
+
+    sameNodeColor = False
     print("Using a threshold of {} for the RSSI, with multilateration: {}, using trilateration: {}, the average error was {} m".format(rssiThreshold, not isTrilat, isTrilat, (averageError/numberOfTests)))
     return results
 
@@ -167,7 +169,7 @@ def main(args=None):
         optMultilat = True
     if args.other_multilat:
         otherMultilat = True
-        
+
     if args.month==None:
         print("Please enter a month. Currently, these are the supported types: 'June' and 'March'")
     elif args.month.lower()=="june" or args.month.lower()=="march" or args.month.lower()=="october":

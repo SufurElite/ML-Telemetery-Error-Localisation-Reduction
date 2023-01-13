@@ -22,8 +22,8 @@ def getSignals(arr):
 
 def getNodedistances(arr, month="June"):
     """
-        Function that is used by proximityDataManipulation function. It basically goes 
-        through all the signals in a batch for a specific signal. Excludes any signals 
+        Function that is used by proximityDataManipulation function. It basically goes
+        through all the signals in a batch for a specific signal. Excludes any signals
         that are out of the calcluate_distance range.
     """
     if(month == "June"):
@@ -370,7 +370,7 @@ def findIndex(arr, value):
 def testLowest(arr):
     """
         This basically is the function that can replace the error_calculation function, if we want to
-        choose the lowest error producing signals, just by looking at the error values. So, 
+        choose the lowest error producing signals, just by looking at the error values. So,
         bascially getting all the signals that are the lowest producing (the 3 lowest).
     """
     err = []
@@ -599,7 +599,7 @@ def loadProbabilistc_DecisionTree_Data(isTrilat=False, month="June"):
     pathName = "../Data/"+month+"/distanceNNData.json"
     with open(pathName,"r") as f:
         data = json.load(f)
-    
+
     batchN = 0
     a = 0
     distanceSum = []
@@ -784,4 +784,5 @@ def loadANNData(month="June"):
 
 
 if __name__=="__main__":
-    loadProbabilistc_DecisionTree_Data(isTrilat=False, month="October")
+    #proximityDataManipulation(month="October_2")
+    loadProbabilistc_DecisionTree_Data(isTrilat=True, month="October_2")

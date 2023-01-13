@@ -917,18 +917,17 @@ def associateOctoberData(newData=False, walking=False):
         elif tag!=row[1]['TagId'] or (currDate-baseTime>datetime.timedelta(0,2)):
             # Look for flight data th the same time
             upperBound = baseTime+datetime.timedelta(0,2)
-            nBaseTime = baseTime - datetime.timedelta(hours=5)
-            nUpperBound = upperBound - datetime.timedelta(hours=5)
+
+            #Take away 5 hours from both of them if needed.
+            nBaseTime = baseTime
+            nUpperBound = upperBound
 
 
             if(tag == '55783355'):
                 print(baseTime)
                 print(upperBound)
                 print(tag)
-            print(flightDF)
-            print(nBaseTime, nUpperBound)
             timeSort = flightDF[flightDF['ModifyDate'].between(nBaseTime.strftime("%Y-%m-%d %H:%M:%S"),nUpperBound.strftime("%Y-%m-%d %H:%M:%S"))]
-            print(timeSort)
 
             # then sort the above timeSorted data by the relevant test tag id
             tagSort = timeSort[timeSort['tag_id'].str.contains(tag)]
@@ -1183,5 +1182,5 @@ def calculateDist(RSSI):
 
 if __name__=="__main__":
     #print(deriveEquation(month="October"))
-    associateOctoberData(newData=False, walking=True)
+    associateOctoberData(newData=True, walking=True)
     #rewriteMarchData()

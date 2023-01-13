@@ -10,7 +10,7 @@ from plot import plotGridWithPoints
         This file is going to serve as the master code to run the whole data prediction with different models
 """
 
-def SM(month="June", rssiThreshold=-102, useCovariate=True):
+def SM(month="June", rssiThreshold=-102, useCovariate=False):
     """
         1. SM - simple multilateration
     """
@@ -22,21 +22,21 @@ def SM(month="June", rssiThreshold=-102, useCovariate=True):
     plt = plotGridWithPoints(errorLocs,gridSetup=gridS,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = True, errors=allErrors, sameNodeColor=False)
 
     return results, plt
-def SM_MLD(month="June", rssiThreshold=-102, useCovariate=True):
+def SM_MLD(month="June", rssiThreshold=-102, useCovariate=False):
     """
         2. SM_MLD - simple multilateration and machine learning based on distance
     """
     results, plt = rmseModel(month=month,threshold=rssiThreshold, useCovariate=useCovariate,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
 
     return results, plt
-def SM_MLS(month="June", rssiThreshold=-102, useCovariate=True):
+def SM_MLS(month="June", rssiThreshold=-102, useCovariate=False):
     """
         3. SM_MLS - simple multilateration and machine learning based on signal
     """
     results, plt = rmseModel(month=month,threshold=rssiThreshold, useCovariate=useCovariate,isErrorData=False,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
 
     return results, plt
-def SM_P(month="June", rssiThreshold=-102, useCovariate=True):
+def SM_P(month="June", rssiThreshold=-102, useCovariate=False):
     """
         4. SM_P - simple multilateration with signal rewriting based on the probabilistic decision tree approach
     """
@@ -47,7 +47,7 @@ def SM_P(month="June", rssiThreshold=-102, useCovariate=True):
     plt = plotGridWithPoints(errorLocs,gridSetup=gridS,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = True, errors=allErrors, sameNodeColor=False)
 
     return results, plt
-def ST_P(month="June", rssiThreshold=-102, useCovariate=True):
+def ST_P(month="June", rssiThreshold=-102, useCovariate=False):
     """
         5. ST_P - simple trilateration with choosing the best 3 signals based on the probabilistic decision tree approach
     """
@@ -58,7 +58,7 @@ def ST_P(month="June", rssiThreshold=-102, useCovariate=True):
     plt = plotGridWithPoints(errorLocs,gridSetup=gridS,isSections=True,plotHabitats=True,imposeLimits=True, useErrorBars=False, colorScale = True, errors=allErrors, sameNodeColor=False)
 
     return results, plt
-def SM_P_MLD(month="June", rssiThreshold=-102, useCovariate=True):
+def SM_P_MLD(month="June", rssiThreshold=-102, useCovariate=False):
     """
         6. SM_P_MLD - simple multilateration with signal rewriting based on the probabilistic decision tree approach
            then applying machinelearning based on distance
@@ -66,7 +66,7 @@ def SM_P_MLD(month="June", rssiThreshold=-102, useCovariate=True):
     results, plt = rmseModel(month=month, threshold=rssiThreshold, useCovariate=useCovariate,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True, isTrilat=False, optMultilat=True, otherMultilat=False)
 
     return results, plt
-def SM_P_MLS(month="June", rssiThreshold=-102, useCovariate=True):
+def SM_P_MLS(month="June", rssiThreshold=-102, useCovariate=False):
     """
         7. SM_P_MLS - simple multilateration with signal rewriting based on the probabilistic decision tree approach
            then applying machinelearning based on signal
@@ -74,7 +74,7 @@ def SM_P_MLS(month="June", rssiThreshold=-102, useCovariate=True):
     results, plt = rmseModel(month=month, threshold=rssiThreshold, useCovariate=useCovariate,isErrorData=False,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True, isTrilat=False, optMultilat=True, otherMultilat=False)
 
     return results, plt
-def ST_P_MLD(month="June", rssiThreshold=-102, useCovariate=True):
+def ST_P_MLD(month="June", rssiThreshold=-102, useCovariate=False):
     """
         8. ST_P_MLD - simple trilateration with choosing the best 3 signals based on the probabilistic decision tree approach
            then applying machine learning based on distance
@@ -82,7 +82,7 @@ def ST_P_MLD(month="June", rssiThreshold=-102, useCovariate=True):
     results, plt = rmseModel(month=month, threshold=rssiThreshold, useCovariate=useCovariate,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True, isTrilat=True, optMultilat=False, otherMultilat=False)
 
     return results, plt
-def ST_P_MLS(month="June", rssiThreshold=-102, useCovariate=True):
+def ST_P_MLS(month="June", rssiThreshold=-102, useCovariate=False):
     """
         9. ST_P_MLS - simple trilateration with choosing the best 3 signals based on the probabilistic decision tree approach
            then applying machine learning based on signal

@@ -29,7 +29,7 @@ def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, s
     if isErrorData:
         X, y = loadModelData(month=month,threshold=threshold, verbose=False, includeCovariatePred=useCovariate, isTrilat=isTrilat, optMultilat=optMultilat, otherMultilat=otherMultilat)
     else:
-        X, y = loadRSSModelData(month=month,includeCovariatePred=True, isTrilat=isTrilat, optMultilat=optMultilat, otherMultilat=otherMultilat)
+        X, y = loadRSSModelData(month=month,includeCovariatePred=useCovariate, isTrilat=isTrilat, optMultilat=optMultilat, otherMultilat=otherMultilat)
 
     # Split the data into train, test, and validation sets
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
@@ -274,5 +274,6 @@ def ANNDistanceModel(save = False):
 
 
 if __name__ == "__main__":
-    rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
-    rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True, isTrilat=False, optMultilat=False, otherMultilat=False)
+    #rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True)
+    #rmseModel(month="June", threshold=-101, useCovariate=True,isErrorData=True,plotError=True, useColorScale=True, useErrorBars = False, sameNodeColor=True, isTrilat=False, optMultilat=False, otherMultilat=False)
+    covariateTrain(saveModel=True,randomForest=True)

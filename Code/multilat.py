@@ -61,7 +61,7 @@ def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTrilat = False, optMu
     if(month =="March"):
         #Load March - new JSON
         data = utils.loadData(month="March",isTrilat=isTrilat, optMultilat=optMultilat)
-        nodes = utils.loadNodes(rewriteUTM=False)
+        nodes = utils.loadNodes(rewriteUTM=True)
     if(month == "October"):
         data = utils.loadData(month="October",isTrilat=isTrilat, optMultilat=optMultilat)
         nodes = utils.loadNodes_46()

@@ -784,5 +784,5 @@ def loadANNData(month="June"):
 
 
 if __name__=="__main__":
-    #proximityDataManipulation(month="October_2")
-    loadProbabilistc_DecisionTree_Data(isTrilat=True, month="October_2")
+    #proximityDataManipulation(month="November")
+    loadProbabilistc_DecisionTree_Data(isTrilat=False, month="November")

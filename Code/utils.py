@@ -1025,6 +1025,150 @@ def associateOctoberData(newData=False, walking=False):
     print(errorDist)
     print("There were {} rows,\nof which there were {} 2 second intervals/batches with relevant data,\naveraging {} rows a batch".format(len(beepData),avgNums[0],(avgNums[1]/avgNums[0])))
 
+def associateNovemberData(newData=False):
+    """
+        Associates the Novmber data to be in the same format as the other associated test data.
+
+        [Should be refactored for only one associated month data function.]
+    """
+    nodeLocations = loadNodes_46()
+    #Load the October data
+    beepData = pd.read_csv(r'../Data/November/BeepData.csv')
+    #Sorting the values again, same as before
+    beepData.sort_values(by = ['TagId', 'Time.local'], axis=0, ascending=[False, True], inplace=True, ignore_index=True, key=None)
+
+    flightDF = pd.read_csv(r'../Data/November/walking_tests.csv', index_col=None, header=0)
+    flightDF['ModifyDate'] = pd.to_datetime(flightDF['ModifyDate'], format="%Y-%m-%dT%H:%M:%SZ")
+
+    # X will be composed of batches of data
+    X = []
+    # y will be composed of X items corresponding GT flight values
+    y = []
+    batch = {}
+    baseTime = '0'
+    tag = ''
+    errorDist = [0,0,0,0]
+    avgNums = [0,0]
+    missedTheCut = 0
+    missedthecutbadSort = 0
+    missedTheCutTooFew = 0
+    for index, row in enumerate(beepData.iterrows()):
+        #Converting time
+        row[1]['Time.local'] = datetime.datetime.strptime(row[1]['Time.local'], "%Y-%m-%dT%H:%M:%SZ")
+        currDate = row[1]['Time.local']
+        if row[1]['NodeId']=="3288000000": row[1]['NodeId']="3288e6"
+
+        if baseTime == '0':
+            batch = {}
+            baseTime = currDate
+            tag = row[1]['TagId']
+        elif tag!=row[1]['TagId'] or (currDate-baseTime>datetime.timedelta(0,2)):
+            # Look for flight data th the same time
+            upperBound = baseTime+datetime.timedelta(0,2)
+
+            #Take away 5 hours from both of them if needed.
+            nBaseTime = baseTime
+            nUpperBound = upperBound
+
+
+            if(tag == '55783355'):
+                print(baseTime)
+                print(upperBound)
+                print(tag)
+            timeSort = flightDF[flightDF['ModifyDate'].between(nBaseTime.strftime("%Y-%m-%d %H:%M:%S"),nUpperBound.strftime("%Y-%m-%d %H:%M:%S"))]
+
+            # then sort the above timeSorted data by the relevant test tag id
+            tagSort = timeSort[timeSort['tag_id'].str.contains(tag)]
+
+            if len(batch.keys())>=3 and len(tagSort)!=0:
+                data = {}
+
+                data["time"] = baseTime.strftime("%Y-%m-%dT%H:%M:%SZ")
+                data["tag"] = tag
+                data["data"]={}
+                rowVals = 0
+                #print(batch)
+                #input()
+                for i in batch.keys():
+                    # average the tag-Node RSSi value
+                    if newData == True:
+                        data["data"][i] = batch[i]
+                    else:
+                        data["data"][i] = batch[i][1]/batch[i][0]
+                    rowVals+=batch[i][0]
+                #print(data["data"])
+                X.append(data)
+                if newData == True:
+                    avgAlt = tagSort["AbsoluteAltitude"].mean()
+                # get the average latitude over the 2 seconds
+                avgLat = tagSort["GPSLatitude"].mean()
+                # get the average longitude over the 2 seconds
+                avgLong = tagSort["GPSLongitude"].mean()
+
+                #If newData is true; then we add the altitude as well
+                if newData == True:
+                    y.append([avgLat,avgLong,avgAlt])
+                else:
+                    y.append([avgLat,avgLong])
+
+                avgNums[0]+=1
+                avgNums[1]+=rowVals
+            else:
+                if tag=="5552664C":
+                    errorDist[0]+=1
+                elif index<16518:
+                    errorDist[1]+=1
+                elif index<21253:
+                    errorDist[2]+=1
+                else:
+                    errorDist[3]+=1
+                if(len(batch.keys())<3):
+                    missedTheCutTooFew+=1
+                elif len(tagSort)==0:
+                    missedthecutbadSort+=1
+                missedTheCut+=len(batch.keys())
+            # Reset the variables
+            batch = {}
+            baseTime = currDate
+            tag = row[1]['TagId']
+        #If the newData is true; then gather different info
+        if  newData == True:
+            if row[1]['NodeId'] not in batch.keys():
+                batch[row[1]['NodeId']]=[0,0,[]]
+                batch[row[1]['NodeId']][0] +=1
+                name = row[1]['NodeId']
+                if name == '3288000000': name = '3288e6'
+                batch[row[1]['NodeId']][1] = [nodeLocations[name]['Latitude'],nodeLocations[name]['Longitude']]
+                batch[row[1]['NodeId']][2].append(row[1]['TagRSSI'])
+            elif row[1]['NodeId'] in batch.keys():
+                batch[row[1]['NodeId']][0] +=1
+                batch[row[1]['NodeId']][2].append(row[1]['TagRSSI'])
+        #Otherwise, gather the same information
+        else:
+            if row[1]['NodeId'] not in batch.keys():
+                batch[row[1]['NodeId']]=[0,0]
+            batch[row[1]['NodeId']][0]+=1
+            batch[row[1]['NodeId']][1]+=row[1]['TagRSSI']
+
+    # every x should have a corresponding y
+    assert(len(X)==len(y))
+    finalData = {}
+    finalData['X']=X
+    finalData['y']=y
+    if(newData == True):
+        with open("../Data/November/newData.json","w+") as f:
+            json.dump(finalData, f)
+    else:
+        with open("../Data/November/associatedTestData.json","w+") as f:
+            json.dump(finalData, f)
+    print(missedTheCut,missedTheCutTooFew,missedthecutbadSort)
+    print(errorDist)
+    print("There were {} rows,\nof which there were {} 2 second intervals/batches with relevant data,\naveraging {} rows a batch".format(len(beepData),avgNums[0],(avgNums[1]/avgNums[0])))
+
+
+
+
+
 def getPlotValues(results, month):
     """
         Function that helps getting the plot values out of the results variable from the master.py when run with simple multilat.
@@ -1182,5 +1326,4 @@ def calculateDist(RSSI):
 
 if __name__=="__main__":
     #print(deriveEquation(month="October"))
-    associateOctoberData(newData=True, walking=True)
-    #rewriteMarchData()
+    associateNovemberData(newData=True)

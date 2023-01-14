@@ -2,7 +2,7 @@
 from multilat import predictions
 from utils import getPlotValues
 from model import rmseModel
-import csv
+import csv, os
 import argparse
 from plot import plotGridWithPoints
 
@@ -106,9 +106,14 @@ def specific_result(function_mappings, func_name, month, rssiThreshold, useCovar
     """
     results, plt = function_mappings[func_name](month, rssiThreshold, useCovariate)
 
-    #Csv file save
+    
+    # Csv file save
     fname = "results_"+func_name+"_"+month+"_"+str(rssiThreshold)+"_Habitat-"+str(useCovariate)+".csv"
-    fpath="../Code/Results/"+fname
+    fpath="../Code/Results/Total/"
+    if not os.path.isdir(fpath):
+        os.makedirs(fpath)
+    fpath+=fname
+
     with open(fpath, "w+", newline="" ,encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(["Actual_UTMx", "Actual_UTMy", "Predicted_UTMx", "Predicted_UTMy", "Error"])
@@ -116,7 +121,7 @@ def specific_result(function_mappings, func_name, month, rssiThreshold, useCovar
             writer.writerow([results[id]["gt"][0], results[id]["gt"][1], results[id]["res"][0], results[id]["res"][1], results[id]["error"]])
     #Image save
     imageName = "results_"+func_name+"_"+month+"_"+str(rssiThreshold)+"_Habitat-"+str(useCovariate)+".png"
-    imagePath ="../Code/Results/"+imageName
+    imagePath ="../Code/Results/Total/"+imageName
     plt.savefig(imagePath)
 
 

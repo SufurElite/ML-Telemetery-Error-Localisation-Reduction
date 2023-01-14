@@ -110,6 +110,7 @@ def specific_result(function_mappings, func_name, month, rssiThreshold, useCovar
     # Csv file save
     fname = "results_"+func_name+"_"+month+"_"+str(rssiThreshold)+"_Habitat-"+str(useCovariate)+".csv"
     fpath="../Code/Results/Total/"
+    # check if this directory exists, if not then create it
     if not os.path.isdir(fpath):
         os.makedirs(fpath)
     fpath+=fname

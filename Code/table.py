@@ -1,17 +1,32 @@
+"""
+    Once the master.py file has been run and all the different test csvs are ready to be analysed, 
+    create a master table that distils the information to be viewed
+"""
 import os
 import pandas as pd
 import argparse 
 
+# these are the RSSI values to filter the totality of the data down
 default_RSSIs = [-87, -90, -93, -96, -99, -101, -102]
+# the directory with the data
 dir = os.getcwd()+"/Results/Total/"
 
 def get_results(df:pd.DataFrame):
+    """
+        Given the particular csv dataframe
+        get the number of rows, its mean, and its standard deviation
+    """
     num_rows = len(df)
     mean = df.loc[:, "Error"].mean()
     std = df.loc[:, "Error"].std()
     return num_rows, mean, std
 
 def disect_name(fname: str):
+    """
+        Given a csv file's name, we want to be able to extract
+        its function, month, threshold value, and habitat        
+    """
+
     starting_text = "results_"
     months = ["March","June", "October", "November"]
 
@@ -20,33 +35,46 @@ def disect_name(fname: str):
     threshold = 0,
     habitat = False
 
-    
-
+    # the start of fname is simply results_, so let's start after that
     fname=fname[len(starting_text):]
     threshold_idx = -1
+    
+    # find the month
     for m in months:
-        idx = fname.find(m)
-        if idx>-1:
-            method = fname[:idx-1]
+        month_idx = fname.find(m)
+        if month_idx>-1:
+            # once the month is found, both the method, which is everything before the month
+            # the month and then the start to the threshold, which is right after the month 
+            # can be found
+            method = fname[:month_idx-1]
             threshold_idx = fname.find("-")
-            month = fname[idx:threshold_idx-1]
+            month = fname[month_idx:threshold_idx-1]
             break
     
     if month == "": raise Exception("No month found")
     
+    # the threshold ends with the start of the Habitat
+    # we try to cast the threshold as an int
     habitat_idx = fname.find("_Habitat")
     try:
         threshold = int(fname[threshold_idx:habitat_idx])
     except:
         raise Exception("Incorrectly formatted threshold found. Found: {}".format(fname[threshold_idx:habitat_idx]))
 
+    # the habitat value is then either True or False and starts
+    # after _Habitat- up to the start of the file extension
     hab_val = fname[habitat_idx+1+len("Habitat-"):len(fname)-4]
     if hab_val=="True":
         habitat = True
-
+    
     return method, month, threshold, habitat
 
 def main(certain_threshold:bool = False):
+    """
+        Walk through the directory of the all the result test data
+        and parse the different variations from the title and deduce 
+        the test error and standard deviation
+    """
     cols = ["Function","Month","Threshold","Habitat Covariate","Number of Tests","Average Test Error","Standard Deviation of Test Error"]
     result_df = pd.DataFrame(columns=cols)
 
@@ -78,10 +106,18 @@ def main(certain_threshold:bool = False):
     
 
 if __name__=="__main__":
+
+    if not os.path.isdir(dir):
+        raise Exception("Could not find Results/Total/. You first need to run master.py")
+
     include_threshold = False
+    
     parser = argparse.ArgumentParser()
+    
     parser.add_argument("-a", "--all_threshold", help="If you want to find the values for all the thresholds, include this flag", type=bool, action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
+
     if args.all_threshold!=None:
         include_threshold = True
+
     main(include_threshold)

@@ -54,7 +54,7 @@ def multilateration(points, dist_type ='geodesic'):
 
 def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTrilat = False, optMultilat=False, month="June", otherMultilat=False):
     """ Predictions for March and June """
-    if(month =="June" or mont == "March"):
+    if(month =="June" or month == "March"):
         # Load in the June or March JSON
         data = utils.loadData(month=month,isTrilat=isTrilat, optMultilat=optMultilat)
         nodes = utils.loadNodes(rewriteUTM=True)

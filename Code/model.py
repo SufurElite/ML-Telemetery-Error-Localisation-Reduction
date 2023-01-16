@@ -234,14 +234,18 @@ def getClassificationMetrics(y_test, y_pred):
     print(classification_report(y_test, y_pred))
 
 
-def ANNDistanceModel(save = False):
+def ANNDistanceModel(save = False, combined = False):
     """
         Used to determine if an MLPRegressor would be able to find a better equation for the distance~RSSI.
         The answer was no.
     """
 
     # Load in the new data for determining a new equation
-    with open("../Data/June/newEquationData.json","r") as f:
+    pathName = "../Data/June/newEquationData.json"
+    if(combined == True):
+        pathName = "../Data/CombinedDistanceData/newEquationData.json"
+
+    with open(pathName,"r") as f:
         data = json.load(f)
     tmp_X, y = data['X'], data['Y']
     assert(len(tmp_X)==len(y))
@@ -270,7 +274,7 @@ def ANNDistanceModel(save = False):
     print("The average error was: ", totalErr/count)
     # Save the model
     if(save == True):
-        pickle.dump(clf, open("anndistance.sav", "wb"))
+        pickle.dump(clf, open("models/anndistance.sav", "wb"))
 
 
 if __name__ == "__main__":

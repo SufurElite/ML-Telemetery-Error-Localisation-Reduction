@@ -868,28 +868,36 @@ def associateJuneData(newData = False, newGrid = False):
     print(errorDist)
     print("There were {} rows,\nof which there were {} 2 second intervals/batches with relevant data,\naveraging {} rows a batch".format(len(beepData),avgNums[0],(avgNums[1]/avgNums[0])))
 
-def associateOctoberData(newData=False, walking=False):
+def associateTestData(month="October", newData=False):
     """
-        Associates the October data to be in the same format as the other associated test data.
+        Associates a given month's data - the data is used for predicting the locations.
 
-        [Should be refactored for only one associated month data function.]
+        Only works for months after March, if new month is added, then make sure to follow the same format.
     """
     nodeLocations = loadNodes_46()
-    if(walking == False):
-        #Load the October data
-        beepData = pd.read_csv(r'../Data/October/BeepData.csv')
-        #Sorting the values again, same as before
-        beepData.sort_values(by = ['TagId', 'Time.local'], axis=0, ascending=[False, True], inplace=True, ignore_index=True, key=None)
+    #Load Beep data associated to the month
+    beepData = pd.read_csv(r'../Data/'+month+'/BeepData.csv')
+    #Sorting Beep data
+    beepData.sort_values(by = ['TagId', 'Time.local'], axis=0, ascending=[False, True], inplace=True, ignore_index=True, key=None)
 
-        flightDF = pd.read_csv(r'../Data/October/drone_flights_edited.csv', index_col=None, header=0)
+    if(month == "October"):
+        flightDF = pd.read_csv(r'../Data/'+month+'/drone_flights_edited.csv', index_col=None, header=0)
         flightDF['ModifyDate'] = pd.to_datetime(flightDF['ModifyDate'], format="%Y:%m:%d %H:%M:%S")
-    else:
-        #Load the October data
-        beepData = pd.read_csv(r'../Data/October/BeepData.csv')
-        #Sorting the values again, same as before
-        beepData.sort_values(by = ['TagId', 'Time.local'], axis=0, ascending=[False, True], inplace=True, ignore_index=True, key=None)
+    elif(month == "June"):
+        flights = ['19522D2A_flight1_e.csv', '19522D2A_flight2_e.csv', '19522D2A_flight3_e.csv','5552664C_flight1_e.csv']
 
-        flightDF = pd.read_csv(r'../Data/October/walking_tests_edited.csv', index_col=None, header=0)
+        flightDataList = []
+
+        for flight in flights:
+            df = pd.read_csv('../Data/'+month+'/'+flight, index_col=None, header=0)
+            # get the name of the file right before the _
+            df['tag_id'] = flight[:-12]
+            flightDataList.append(df)
+
+        flightDF = pd.concat(flightDataList, axis=0, ignore_index=True)
+        flightDF['ModifyDate'] = pd.to_datetime(flightDF['ModifyDate'])
+    else:
+        flightDF = pd.read_csv(r'../Data/'+month+'/walking_tests.csv', index_col=None, header=0)
         flightDF['ModifyDate'] = pd.to_datetime(flightDF['ModifyDate'], format="%Y-%m-%dT%H:%M:%SZ")
 
     # X will be composed of batches of data
@@ -917,158 +925,11 @@ def associateOctoberData(newData=False, walking=False):
         elif tag!=row[1]['TagId'] or (currDate-baseTime>datetime.timedelta(0,2)):
             # Look for flight data th the same time
             upperBound = baseTime+datetime.timedelta(0,2)
-
-            #Take away 5 hours from both of them if needed.
             nBaseTime = baseTime
             nUpperBound = upperBound
-
-
-            if(tag == '55783355'):
-                print(baseTime)
-                print(upperBound)
-                print(tag)
-            timeSort = flightDF[flightDF['ModifyDate'].between(nBaseTime.strftime("%Y-%m-%d %H:%M:%S"),nUpperBound.strftime("%Y-%m-%d %H:%M:%S"))]
-
-            # then sort the above timeSorted data by the relevant test tag id
-            tagSort = timeSort[timeSort['tag_id'].str.contains(tag)]
-
-            if len(batch.keys())>=3 and len(tagSort)!=0:
-                data = {}
-
-                data["time"] = baseTime.strftime("%Y-%m-%dT%H:%M:%SZ")
-                data["tag"] = tag
-                data["data"]={}
-                rowVals = 0
-                #print(batch)
-                #input()
-                for i in batch.keys():
-                    # average the tag-Node RSSi value
-                    if newData == True:
-                        data["data"][i] = batch[i]
-                    else:
-                        data["data"][i] = batch[i][1]/batch[i][0]
-                    rowVals+=batch[i][0]
-                #print(data["data"])
-                X.append(data)
-                if newData == True:
-                    avgAlt = tagSort["AbsoluteAltitude"].mean()
-                # get the average latitude over the 2 seconds
-                avgLat = tagSort["GPSLatitude"].mean()
-                # get the average longitude over the 2 seconds
-                avgLong = tagSort["GPSLongitude"].mean()
-
-                #If newData is true; then we add the altitude as well
-                if newData == True:
-                    y.append([avgLat,avgLong,avgAlt])
-                else:
-                    y.append([avgLat,avgLong])
-
-                avgNums[0]+=1
-                avgNums[1]+=rowVals
-            else:
-                if tag=="5552664C":
-                    errorDist[0]+=1
-                elif index<16518:
-                    errorDist[1]+=1
-                elif index<21253:
-                    errorDist[2]+=1
-                else:
-                    errorDist[3]+=1
-                if(len(batch.keys())<3):
-                    missedTheCutTooFew+=1
-                elif len(tagSort)==0:
-                    missedthecutbadSort+=1
-                missedTheCut+=len(batch.keys())
-            # Reset the variables
-            batch = {}
-            baseTime = currDate
-            tag = row[1]['TagId']
-        #If the newData is true; then gather different info
-        if  newData == True:
-            if row[1]['NodeId'] not in batch.keys():
-                batch[row[1]['NodeId']]=[0,0,[]]
-                batch[row[1]['NodeId']][0] +=1
-                name = row[1]['NodeId']
-                if name == '3288000000': name = '3288e6'
-                batch[row[1]['NodeId']][1] = [nodeLocations[name]['Latitude'],nodeLocations[name]['Longitude']]
-                batch[row[1]['NodeId']][2].append(row[1]['TagRSSI'])
-            elif row[1]['NodeId'] in batch.keys():
-                batch[row[1]['NodeId']][0] +=1
-                batch[row[1]['NodeId']][2].append(row[1]['TagRSSI'])
-        #Otherwise, gather the same information
-        else:
-            if row[1]['NodeId'] not in batch.keys():
-                batch[row[1]['NodeId']]=[0,0]
-            batch[row[1]['NodeId']][0]+=1
-            batch[row[1]['NodeId']][1]+=row[1]['TagRSSI']
-
-    # every x should have a corresponding y
-    assert(len(X)==len(y))
-    finalData = {}
-    finalData['X']=X
-    finalData['y']=y
-    if(walking == False):
-        if(newData == True):
-            with open("../Data/October/newData.json","w+") as f:
-                json.dump(finalData, f)
-        else:
-            with open("../Data/October/associatedTestData.json","w+") as f:
-                json.dump(finalData, f)
-    else:
-        if(newData == True):
-            with open("../Data/October_2/newData.json","w+") as f:
-                json.dump(finalData, f)
-        else:
-            with open("../Data/October_2/associatedTestData.json", "w+") as f:
-                json.dump(finalData, f)
-    print(missedTheCut,missedTheCutTooFew,missedthecutbadSort)
-    print(errorDist)
-    print("There were {} rows,\nof which there were {} 2 second intervals/batches with relevant data,\naveraging {} rows a batch".format(len(beepData),avgNums[0],(avgNums[1]/avgNums[0])))
-
-def associateNovemberData(newData=False):
-    """
-        Associates the Novmber data to be in the same format as the other associated test data.
-
-        [Should be refactored for only one associated month data function.]
-    """
-    nodeLocations = loadNodes_46()
-    #Load the October data
-    beepData = pd.read_csv(r'../Data/November/BeepData.csv')
-    #Sorting the values again, same as before
-    beepData.sort_values(by = ['TagId', 'Time.local'], axis=0, ascending=[False, True], inplace=True, ignore_index=True, key=None)
-
-    flightDF = pd.read_csv(r'../Data/November/walking_tests.csv', index_col=None, header=0)
-    flightDF['ModifyDate'] = pd.to_datetime(flightDF['ModifyDate'], format="%Y-%m-%dT%H:%M:%SZ")
-
-    # X will be composed of batches of data
-    X = []
-    # y will be composed of X items corresponding GT flight values
-    y = []
-    batch = {}
-    baseTime = '0'
-    tag = ''
-    errorDist = [0,0,0,0]
-    avgNums = [0,0]
-    missedTheCut = 0
-    missedthecutbadSort = 0
-    missedTheCutTooFew = 0
-    for index, row in enumerate(beepData.iterrows()):
-        #Converting time
-        row[1]['Time.local'] = datetime.datetime.strptime(row[1]['Time.local'], "%Y-%m-%dT%H:%M:%SZ")
-        currDate = row[1]['Time.local']
-        if row[1]['NodeId']=="3288000000": row[1]['NodeId']="3288e6"
-
-        if baseTime == '0':
-            batch = {}
-            baseTime = currDate
-            tag = row[1]['TagId']
-        elif tag!=row[1]['TagId'] or (currDate-baseTime>datetime.timedelta(0,2)):
-            # Look for flight data th the same time
-            upperBound = baseTime+datetime.timedelta(0,2)
-
-            #Take away 5 hours from both of them if needed.
-            nBaseTime = baseTime
-            nUpperBound = upperBound
+            if(month=="October"):
+                nBaseTime -= datetime.timedelta(hours = 5)
+                nUpperBound -= datetime.timedelta(hours = 5)
 
 
             if(tag == '55783355'):
@@ -1156,17 +1017,14 @@ def associateNovemberData(newData=False):
     finalData['X']=X
     finalData['y']=y
     if(newData == True):
-        with open("../Data/November/newData.json","w+") as f:
+        with open("../Data/"+month+"/newData.json","w+") as f:
             json.dump(finalData, f)
     else:
-        with open("../Data/November/associatedTestData.json","w+") as f:
+        with open("../Data/"+month+"/associatedTestData.json","w+") as f:
             json.dump(finalData, f)
     print(missedTheCut,missedTheCutTooFew,missedthecutbadSort)
     print(errorDist)
     print("There were {} rows,\nof which there were {} 2 second intervals/batches with relevant data,\naveraging {} rows a batch".format(len(beepData),avgNums[0],(avgNums[1]/avgNums[0])))
-
-
-
 
 
 def getPlotValues(results, month):
@@ -1190,15 +1048,27 @@ def getPlotValues(results, month):
 
 
 
-def newEquationData(month="June"):
+def newEquationData(month="June", combined = False):
     """
         Saves the given signal and distance pairs.
 
         [This code is near verbatim repeated in dataExploration.py to a degree and the two should be refactored at some point.]
     """
-    pathName = "../Data/"+month+"/newData.json"
-    with open(pathName,"r") as f:
-        data = json.load(f)
+    if(combined == False):
+        pathName = "../Data/"+month+"/newData.json"
+        with open(pathName,"r") as f:
+            data = json.load(f)
+    else:
+        months = ["June", "October", "October_2", "November"]
+        data = {}
+        data["X"] = []
+        data["y"] = []
+        for i in months:
+            pathName = "../Data/"+i+"/newData.json"
+            with open(pathName, "r") as f:
+                tempData = json.load(f)
+            data["X"] = data["X"] + tempData["X"]
+            data["y"] = data["y"] + tempData["y"]
 
     #signal strength -> y values
     signalStr = []
@@ -1209,6 +1079,7 @@ def newEquationData(month="June"):
     for index, item in enumerate(data["X"]):
 
         #Get the keys
+
         keys = item["data"].keys()
 
         #Loop through each item in X data set
@@ -1244,15 +1115,22 @@ def newEquationData(month="June"):
     finalData = {}
     finalData['X']=distances
     finalData['Y']=signalStr
-    with open("../Data/"+month+"/newEquationData.json","w+") as f:
-        json.dump(finalData, f)
+    if(combined == False):
+        with open("../Data/"+month+"/newEquationData.json","w+") as f:
+            json.dump(finalData, f)
+    else:
+        with open("../Data/CombinedDistanceData/newEquationData.json","w+") as f:
+            json.dump(finalData, f)
 
-def deriveEquation(month="June"):
+def deriveEquation(month="June", combined = False):
     """
         Determine the exponential equation to approximate signal strength
         from a given month's set of values
     """
     #Open the newEquationData file, rune newEquationData to get it
+    pathName = "../Data/"+month+"/newEquationData.json"
+    if(combined == True):
+        pathName = "../Data/CombinedDistanceData/newEquationData.json"
     pathName = "../Data/"+month+"/newEquationData.json"
     with open(pathName,"r") as f:
         data = json.load(f)
@@ -1291,7 +1169,7 @@ def deriveEquation(month="June"):
 
 def calculateDist_3(RSSI):
     """ Loads in the MLP that approximates distance given the signal strength and calculates a given signal """
-    model = pickle.load(open('anndistance.sav','rb'))
+    model = pickle.load(open('models/anndistance.sav','rb'))
     y = model.predict([[np.float64(RSSI)]])
     return y[0]
 
@@ -1300,6 +1178,11 @@ def calculateRSSI(distance):
     """ Function that can be used to calculate the signal from distance. This will be relevant for the proximity kind of model. """
     rssi = (np.exp((distance*-0.00568791789392432))*29.797940785785794)-102.48720932300988
     return rssi
+def calculateDist_5(RSSI):
+    """ This equation was derived from June, October, October_2 and November data """
+    dist = np.log((RSSI+102.48720932300988)/29.797940785785794)/-0.00568791789392432
+    return dist
+
 def calculateDist_4(RSSI):
     """ This equation was derived from the October data. """
     dist = np.log((RSSI+102.49622423356026)/25.291400388271217)/-0.006084860650883792
@@ -1325,5 +1208,6 @@ def calculateDist(RSSI):
 
 
 if __name__=="__main__":
-    #print(deriveEquation(month="October"))
-    associateNovemberData(newData=True)
+    #print(deriveEquation(combined=True))
+    #associateTestData(month="June", newData=False)
+    associateJuneData(newData=True)

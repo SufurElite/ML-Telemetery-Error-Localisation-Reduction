@@ -721,7 +721,7 @@ def rewriteMarchData(month="March"):
     with open("../Data/"+month+"/associatedMarchData_2.json","w+") as f:
         json.dump(finalData, f)
 
-def associateJuneData(newData = False, newGrid = False):
+def associateJuneData(newData = False):
     """
         This function currently only works for June but ideally will be refactored
         with the March and October function. It associates the TestIds and its data with the rows

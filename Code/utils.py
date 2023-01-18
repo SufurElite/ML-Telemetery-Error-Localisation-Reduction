@@ -297,15 +297,21 @@ def loadData(month="March", pruned=False, isTrilat = False, optMultilat = False)
         pathName+="Pruned"
     pathName+=".json"
 
-    #Delete after usage.
-    #Currently using another json, so we can test the function, that was written.
     if(isTrilat == True):
-        pathName = "../Data/"+month+"/trilatData.json"
+        pathName = "../Data/"+month+"/trilatData"
+        if pruned:
+            pathName+="Pruned"
+        pathName+=".json"
     if(optMultilat == True):
-        pathName = "../Data/"+month+"/multilatFunctionData.json"
-
-    if month == "March":
-        pathName = "../Data/"+month+"/associatedMarchData_2.json"
+        pathName = "../Data/"+month+"/multilatFunctionData"
+        if pruned:
+            pathName+="Pruned"
+        pathName+=".json"
+    if(month == "March"):
+        pathName = "../Data/"+month+"/associatedMarchData_2"
+        if pruned:
+            pathName+="Pruned"
+        pathName+=".json"
 
     with open(pathName,"r") as f:
         data = json.load(f)
@@ -424,7 +430,7 @@ def loadCovariateData():
 
     return X, y
 
-def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, optMultilat=False, otherMultilat=False):
+def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, optMultilat=False, otherMultilat=False, pruned=False):
     """
         This is similar to loading model data, but the y values, instead of being offsets to correct
         the error derived from multilat, are the distances to each node
@@ -436,7 +442,7 @@ def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, op
     if includeCovariatePred:
         covariateModel = loadCovariateModel(month=month)
     # load in the data
-    data = loadData(month,isTrilat=isTrilat,optMultilat=optMultilat)
+    data = loadData(month,isTrilat=isTrilat,optMultilat=optMultilat, pruned=pruned)
     X_vals = data["X"]
     y_vals = data["y"]
     assert(len(X_vals)==len(y_vals))
@@ -497,7 +503,7 @@ def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, op
 
     return X,y
 
-def loadModelData(month="June", modelType="initial", threshold=-102, includeCovariatePred = False, verbose=True, isTrilat = False, optMultilat=False, otherMultilat=False):
+def loadModelData(month="June", modelType="initial", threshold=-102, includeCovariatePred = False, verbose=True, isTrilat = False, optMultilat=False, otherMultilat=False, pruned=False):
     """
         Unlike the regular loadData function, this one presents the information in a format
         specifically for a model to train on. The way the data will differ depends on if it's initial
@@ -508,11 +514,11 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
     if includeCovariatePred:
         covariateModel = loadCovariateModel(month=month)
     if month=="June":
-        res = multilat.predictions(threshold,keepNodeIds=True, isTrilat=isTrilat, optMultilat=optMultilat,month="June", otherMultilat=otherMultilat)
+        res = multilat.predictions(threshold,keepNodeIds=True, isTrilat=isTrilat, optMultilat=optMultilat,month="June", otherMultilat=otherMultilat, pruned=pruned)
     elif(month == "March"):
-        res = multilat.predictions(threshold,keepNodeIds=True,isTrilat=isTrilat, optMultilat=optMultilat, month="March", otherMultilat=otherMultilat)
+        res = multilat.predictions(threshold,keepNodeIds=True,isTrilat=isTrilat, optMultilat=optMultilat, month="March", otherMultilat=otherMultilat, pruned=pruned)
     else:
-        res = multilat.predictions(threshold, keepNodeIds=True,isTrilat=isTrilat, optMultilat=optMultilat ,month="October",otherMultilat=otherMultilat)
+        res = multilat.predictions(threshold, keepNodeIds=True,isTrilat=isTrilat, optMultilat=optMultilat ,month=month,otherMultilat=otherMultilat, pruned=pruned)
 
     rewriteUtm = False
     if month=="June":
@@ -908,7 +914,7 @@ def pruneAssociatedData(month = "June"):
     assert(len(X) == len(y))
     finalData = {}
     finalData['X']=X
-    finalData['Y']=y
+    finalData['y']=y
     if(month == "March"):
         with open("../Data/"+month+"/associatedMarchData_2Pruned.json","w+") as f:
             json.dump(finalData, f)
@@ -1100,4 +1106,4 @@ def calculateDist(RSSI):
 if __name__=="__main__":
     #print(deriveEquation(combined=True))
     #associateTestData(month="November", newData=True)
-    pruneAssociatedData(month = "March")
+    pruneAssociatedData(month = "November")

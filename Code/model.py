@@ -17,7 +17,7 @@ from multilat import gps_solve
 from kmlInterface import HabitatMap, Habitat
 from plot import plotGridWithPoints
 
-def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, sectionThreshold: int =50, isErrorData: bool =True, useErrorBars: bool = False, useColorScale: bool = True, plotError: bool = True, useThresholdError: bool = False, sameNodeColor: bool = False, isTrilat: bool=False, optMultilat: bool=False, otherMultilat: bool=False):
+def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, sectionThreshold: int =50, isErrorData: bool =True, useErrorBars: bool = False, useColorScale: bool = True, plotError: bool = True, useThresholdError: bool = False, sameNodeColor: bool = False, isTrilat: bool=False, optMultilat: bool=False, otherMultilat: bool=False, pruned: bool=False):
     """ Root mean squared error XGBoost trained on the june data
             useCovariate : bool, refers to whether or not to include the predicted habitat with determining
             the location
@@ -27,13 +27,13 @@ def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, s
     """
     # Load in the data by the inputted boolean
     if isErrorData:
-        X, y = loadModelData(month=month,threshold=threshold, verbose=False, includeCovariatePred=useCovariate, isTrilat=isTrilat, optMultilat=optMultilat, otherMultilat=otherMultilat)
+        X, y = loadModelData(month=month,threshold=threshold, verbose=False, includeCovariatePred=useCovariate, isTrilat=isTrilat, optMultilat=optMultilat, otherMultilat=otherMultilat, pruned=pruned)
     else:
-        X, y = loadRSSModelData(month=month,includeCovariatePred=useCovariate, isTrilat=isTrilat, optMultilat=optMultilat, otherMultilat=otherMultilat)
+        X, y = loadRSSModelData(month=month,includeCovariatePred=useCovariate, isTrilat=isTrilat, optMultilat=optMultilat, otherMultilat=otherMultilat, pruned=pruned)
 
     # Split the data into train, test, and validation sets
     X_train, X_remaining, y_train, y_remaining = train_test_split(X, y, train_size=0.8, random_state=101)
-    X_valid, X_test, y_valid, y_test = train_test_split(X_remaining,y_remaining, test_size=0.5, random_state=88)
+    X_valid, X_test, y_valid, y_test = train_test_split(X_remaining,y_remaining, test_size=0.75, random_state=88)
 
     # Train a regressor on it
     reg = xgb.XGBRegressor(tree_method="hist", n_estimators=32)

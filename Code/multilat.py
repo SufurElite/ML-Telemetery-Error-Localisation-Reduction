@@ -52,14 +52,14 @@ def multilateration(points, dist_type ='geodesic'):
     return least_squares(residuals_fn(points, dist), x0).x
 
 
-def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTrilat = False, optMultilat=False, month="June", otherMultilat=False):
+def predictions(rssiThreshold=-105.16,keepNodeIds=False, isTrilat = False, optMultilat=False, month="June", otherMultilat=False, pruned=False):
     """ Predictions for March and June """
     if(month =="June" or month == "March"):
         # Load in the June or March JSON
-        data = utils.loadData(month=month,isTrilat=isTrilat, optMultilat=optMultilat)
+        data = utils.loadData(month=month,isTrilat=isTrilat, optMultilat=optMultilat, pruned=pruned)
         nodes = utils.loadNodes(rewriteUTM=True)
     else:
-        data = utils.loadData(month=month,isTrilat=isTrilat, optMultilat=optMultilat)
+        data = utils.loadData(month=month,isTrilat=isTrilat, optMultilat=optMultilat, pruned=pruned)
         nodes = utils.loadNodes_46()
     # assign the relevant variables
     X = data["X"]

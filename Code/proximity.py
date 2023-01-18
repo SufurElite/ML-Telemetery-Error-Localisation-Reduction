@@ -580,7 +580,7 @@ def findDistance(arr, itemSkip ,count):
 
 
 
-def loadProbabilistc_DecisionTree_Data(isTrilat=False, month="June"):
+def loadProbabilistc_DecisionTree_Data(isTrilat=False, month="June", pruned =False):
     """
         Idea here would be gather the signal and then the calculated distance, then get what the error is
         then train the signal and the error on the model. Model would try to predict the error that is
@@ -675,8 +675,65 @@ def loadProbabilistc_DecisionTree_Data(isTrilat=False, month="June"):
                 that were not change) or do multilateration with the signals excluding the 3 signals that were not
                 changed.
             """
+            if(pruned==True):
+                if(inside !=-1):
+                    identified = []
+                    optIdentified = []
 
-            if(inside != -1):
+                    #While loop that will run the error_calculations again and again, till
+                    #3 singals are identified by the removeHighestError and the error_calculation funcitons
+                    canCont = False
+                    while canCont == False:
+                        errorCalcs = []
+                        errorVals = []
+                        newImportants = []
+
+
+                        #Calculates all the errors for all the signals in the batch, then adds them to a list
+                        #errorCalcs -> errorProbabilites for the signals
+                        #newImprotants -> the data for the the specific errorProbabiltiy, this is identical
+                        #to the importantDs, but it is easier to introduce another list, so we can replace this later on, without
+                        #damaging the importantDs.
+                        for important in importantDs:
+                            newImportant = error_calculation(important, identified)
+                            errorCalcs.append(newImportant[1])
+                            newImportants.append(newImportant[0])
+                            errorVals.append(newImportant[2])
+
+                        newImportants, identified, newImportantsCopy = removeHighestError(newImportants, errorCalcs, identified)
+                        optIdentified = optimizeSignal(newImportantsCopy, errorVals, identified, optIdentified)
+                        #if we chose all the best values for trilateration, turns out the function is working, just
+                        #trilateriation is not that powerful.
+                        importantDs = newImportants
+
+                        #If it has the length of 3, so 3 signals are identified then we can stop.
+                        if(len(newImportants) == 3):
+                            canCont = True
+
+                    """
+                        Gathering the data for a trilateration.json or multilateration.json
+                    """
+
+                    #If not trilateration add the replaced signal values - corrected signals
+                    if(isTrilat == False):
+                        for optSig in optIdentified:
+                            importantDs.append(optSig)
+
+
+                    fileData = {}
+                    for fileE in importantDs:
+                        fileData[fileE[len(fileE)-1]] = fileE[0]
+
+
+                    outerFileData = {}
+                    #Adding a random time and tag - dummy variables - so that it has the same data structure
+                    outerFileData["time"] = random.randint(0,1000000)
+                    outerFileData["tag"] = random.randint(0,1000000)
+                    outerFileData["data"] = fileData
+
+                    fileX.append(outerFileData)
+                    fileY.append(keptDronePos)
+            else:
                 identified = []
                 optIdentified = []
 
@@ -733,6 +790,7 @@ def loadProbabilistc_DecisionTree_Data(isTrilat=False, month="June"):
 
                 fileX.append(outerFileData)
                 fileY.append(keptDronePos)
+
             #Reset the batch data, start with new batch and start adding the values.
             a = 0
             batchN = i[3]
@@ -753,13 +811,22 @@ def loadProbabilistc_DecisionTree_Data(isTrilat=False, month="June"):
     finalData = {}
     finalData['X']=fileX
     finalData['y']=fileY
-    if(isTrilat == False):
-        with open("../Data/"+month+"/multilatFunctionData.json","w+") as f:
+    if(pruned==False):
+        if(isTrilat == False):
+            with open("../Data/"+month+"/multilatFunctionData.json","w+") as f:
+                    json.dump(finalData, f)
+        else:
+            #Save the file in a json, that will be used for modelling / training
+            with open("../Data/"+month+"/trilatData.json","w+") as f:
                 json.dump(finalData, f)
     else:
-        #Save the file in a json, that will be used for modelling / training
-        with open("../Data/"+month+"/trilatData.json","w+") as f:
-            json.dump(finalData, f)
+        if(isTrilat == False):
+            with open("../Data/"+month+"/multilatFunctionDataPruned.json","w+") as f:
+                    json.dump(finalData, f)
+        else:
+            #Save the file in a json, that will be used for modelling / training
+            with open("../Data/"+month+"/trilatDataPruned.json","w+") as f:
+                json.dump(finalData, f)
 
 
 
@@ -785,4 +852,4 @@ def loadANNData(month="June"):
 
 if __name__=="__main__":
     #proximityDataManipulation(month="November")
-    loadProbabilistc_DecisionTree_Data(isTrilat=False, month="November")
+    loadProbabilistc_DecisionTree_Data(isTrilat=True, month="November", pruned=True)

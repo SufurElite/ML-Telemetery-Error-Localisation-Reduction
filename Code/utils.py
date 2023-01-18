@@ -721,154 +721,7 @@ def rewriteMarchData(month="March"):
     with open("../Data/"+month+"/associatedMarchData_2.json","w+") as f:
         json.dump(finalData, f)
 
-def associateJuneData(newData = False):
-    """
-        This function currently only works for June but ideally will be refactored
-        with the March and October function. It associates the TestIds and its data with the rows
-    """
-
-    if(newData == True):
-        nodeLocations = loadNodes(rewriteUTM=True)
-
-    # Load the June BeepData in
-    beepData = pd.read_csv(r'../Data/June/BeepData.csv')
-    # sort the data by tag and time, so that as we increment we can group them together in ~2 second intervals
-    beepData.sort_values(by = ['TagId', 'Time.local'], axis=0, ascending=[False, True], inplace=True, ignore_index=True, key=None)
-    # Load all the flight data into dataframes, and then combine into one dataframe
-    flights = ['19522D2A_flight1.csv', '19522D2A_flight2.csv', '19522D2A_flight3.csv','5552664C_flight1.csv']
-
-    flightDataList = []
-
-    for flight in flights:
-        df = pd.read_csv('../Data/June/'+flight, index_col=None, header=0)
-        # get the name of the file right before the _
-        df['TagId'] = flight[:-12]
-        flightDataList.append(df)
-
-    flightDF = pd.concat(flightDataList, axis=0, ignore_index=True)
-    flightDF['datetime(utc)'] = pd.to_datetime(flightDF['datetime(utc)'])
-
-    """
-    General idea:
-        The beep data (input values) are sorted by tag and by time, so increasing over them should
-        be data that belongs to either the same batch (of 2 secs) or to the next batch
-
-        Approach -
-            Increment over the beepdata and check if the row is either over 2 seconds ahead of the base value
-            in which case reset the base value, or include it in the batch of data (assuming the data )
-            Only include the batch if there are at least 3 nodes included and there is a corresponding flightdata
-    """
-    # X will be composed of batches of data
-    X = []
-    # y will be composed of X items corresponding GT flight values
-    y = []
-    batch = {}
-    baseTime = '0'
-    tag = ''
-    errorDist = [0,0,0,0]
-    avgNums = [0,0]
-    missedTheCut = 0
-    missedthecutbadSort = 0
-    missedTheCutTooFew = 0
-    for index, row in enumerate(beepData.iterrows()):
-        #Converting time
-        row[1]['Time.local'] = datetime.datetime.strptime(row[1]['Time.local'], "%Y-%m-%dT%H:%M:%SZ")
-        currDate = row[1]['Time.local']
-        #Changing NodeId - because NewData needs to find the NodeID
-        if row[1]['NodeId']=="3288000000": row[1]['NodeId']="3288e6"
-
-        if baseTime == '0':
-            batch = {}
-            baseTime = currDate
-            tag = row[1]['TagId']
-        elif tag!=row[1]['TagId'] or (currDate-baseTime>datetime.timedelta(0,2)):
-            # Look for flight data th the same time
-            upperBound = baseTime+datetime.timedelta(0,2)
-            timeSort = flightDF[flightDF['datetime(utc)'].between(baseTime.strftime("%Y-%m-%d %H:%M:%S"),upperBound.strftime("%Y-%m-%d %H:%M:%S"))]
-            # then sort the above timeSorted data by the relevant test tag id
-            tagSort = timeSort[timeSort['TagId'].str.contains(tag)]
-
-            if len(batch.keys())>=3 and len(tagSort)!=0:
-                data = {}
-                data["time"] = baseTime.strftime("%Y-%m-%dT%H:%M:%SZ")
-                data["tag"] = tag
-                data["data"]={}
-                rowVals = 0
-                for i in batch.keys():
-                    # average the tag-Node RSSi value
-                    if newData == True:
-                        data["data"][i] = batch[i]
-                    else:
-                        data["data"][i] = batch[i][1]/batch[i][0]
-                    rowVals+=batch[i][0]
-                print(data["data"])
-                X.append(data)
-                if newData == True:
-                    avgAlt = tagSort["altitude_above_seaLevel(feet)"].mean()
-                # get the average latitude over the 2 seconds
-                avgLat = tagSort["latitude"].mean()
-                # get the average longitude over the 2 seconds
-                avgLong = tagSort["longitude"].mean()
-
-                #If newData is true; then we add the altitude as well
-                if newData == True:
-                    y.append([avgLat,avgLong,avgAlt])
-                else:
-                    y.append([avgLat,avgLong])
-
-                avgNums[0]+=1
-                avgNums[1]+=rowVals
-            else:
-                if tag=="5552664C":
-                    errorDist[0]+=1
-                elif index<16518:
-                    errorDist[1]+=1
-                elif index<21253:
-                    errorDist[2]+=1
-                else:
-                    errorDist[3]+=1
-                if(len(batch.keys())<3):
-                    missedTheCutTooFew+=1
-                elif len(tagSort)==0:
-                    missedthecutbadSort+=1
-                missedTheCut+=len(batch.keys())
-            # Reset the variables
-            batch = {}
-            baseTime = currDate
-            tag = row[1]['TagId']
-        #If the newData is true; then gather different info
-        if  newData == True:
-            if row[1]['NodeId'] not in batch.keys():
-                batch[row[1]['NodeId']]=[0,0,[]]
-                batch[row[1]['NodeId']][0] +=1
-                name = row[1]['NodeId']
-                batch[row[1]['NodeId']][1] = [nodeLocations[name]['Latitude'],nodeLocations[name]['Longitude']]
-                batch[row[1]['NodeId']][2].append(row[1]['TagRSSI'])
-            elif row[1]['NodeId'] in batch.keys():
-                batch[row[1]['NodeId']][0] +=1
-                batch[row[1]['NodeId']][2].append(row[1]['TagRSSI'])
-        #Otherwise, gather the same information
-        else:
-            if row[1]['NodeId'] not in batch.keys():
-                batch[row[1]['NodeId']]=[0,0]
-            batch[row[1]['NodeId']][0]+=1
-            batch[row[1]['NodeId']][1]+=row[1]['TagRSSI']
-    # every x should have a corresponding y
-    assert(len(X)==len(y))
-    finalData = {}
-    finalData['X']=X
-    finalData['y']=y
-    if(newData == True):
-        with open("../Data/June/newData.json","w+") as f:
-            json.dump(finalData, f)
-    else:
-        with open("../Data/June/associatedTestData.json","w+") as f:
-            json.dump(finalData, f)
-    print(missedTheCut,missedTheCutTooFew,missedthecutbadSort)
-    print(errorDist)
-    print("There were {} rows,\nof which there were {} 2 second intervals/batches with relevant data,\naveraging {} rows a batch".format(len(beepData),avgNums[0],(avgNums[1]/avgNums[0])))
-
-def associateTestData(month="October", newData=False):
+def associateTestData(month = "October", newData = False):
     """
         Associates a given month's data - the data is used for predicting the locations.
 
@@ -1025,6 +878,43 @@ def associateTestData(month="October", newData=False):
     print(missedTheCut,missedTheCutTooFew,missedthecutbadSort)
     print(errorDist)
     print("There were {} rows,\nof which there were {} 2 second intervals/batches with relevant data,\naveraging {} rows a batch".format(len(beepData),avgNums[0],(avgNums[1]/avgNums[0])))
+
+def pruneAssociatedData(month = "June"):
+    """
+        Function that will prune the associateTestData.json files for months June, October, October_2 and November.
+        The function exludes points that are outside the grid system during the test flight.
+    """
+    pathName = "../Data/"+month+"/associatedTestData.json"
+    if(month == "March"):
+        pathName = "../Data/"+month+"/associatedMarchData_2.json"
+    with open(pathName,"r") as f:
+        data = json.load(f)
+    grid, sections, nodes = loadSections()
+    if(month == "June" or month == "March"):
+        grid, sections, nodes = loadSections_Old()
+
+    X = []
+    y = []
+    #Loop through the items in data set X
+    for index, item in enumerate(data["X"]):
+        dronePos = (data["y"][index][0],data["y"][index][1])
+        if(month == "March"):
+            if(pointToSection(data["y"][index][0],data["y"][index][1], sections) ==-1): continue
+        else:
+            utmPos = utm.from_latlon(dronePos[0], dronePos[1])
+            if(pointToSection(utmPos[0], utmPos[1], sections) ==-1): continue
+        X.append(item)
+        y.append(data["y"][index])
+    assert(len(X) == len(y))
+    finalData = {}
+    finalData['X']=X
+    finalData['Y']=y
+    if(month == "March"):
+        with open("../Data/"+month+"/associatedMarchData_2Pruned.json","w+") as f:
+            json.dump(finalData, f)
+    else:
+        with open("../Data/"+month+"/associatedTestDataPruned.json","w+") as f:
+            json.dump(finalData, f)
 
 
 def getPlotValues(results, month):
@@ -1209,5 +1099,5 @@ def calculateDist(RSSI):
 
 if __name__=="__main__":
     #print(deriveEquation(combined=True))
-    #associateTestData(month="June", newData=False)
-    associateJuneData(newData=True)
+    #associateTestData(month="November", newData=True)
+    pruneAssociatedData(month = "March")

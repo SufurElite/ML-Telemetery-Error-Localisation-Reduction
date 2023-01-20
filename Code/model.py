@@ -89,6 +89,7 @@ def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, s
     allErrors = []
     freqErrorSections = {}
     freqErrorHabitats = {}
+    freqErrorBuckets = {}
     # want to load in the section nodes
     if month=="June" or month=="March":
         grid, sections, nodes = loadSections_Old()
@@ -111,7 +112,9 @@ def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, s
     for i in range(len(sections)):
         freqErrorSections[i] = []
     freqErrorSections[-1] = []
-
+    for j in range(0,5):
+        freqErrorBuckets[str(j*25)+"-"+str(j*25+25)] = []
+    freqErrorBuckets["125+"] = []
     # assign the habitat values and outside grid value
     habitat_titles = habitatMap.getHabitats()
     for habitat_title in habitat_titles:
@@ -164,6 +167,18 @@ def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, s
                 freqErrorHabitats[habitatName].append(dist)
             else:
                 freqErrorHabitats[habIdx].append(dist)
+            if(dist <= 25):
+                freqErrorBuckets["0-25"].append(dist)
+            elif(dist <= 50):
+                freqErrorBuckets["25-50"].append(dist)
+            elif(dist <= 75):
+                freqErrorBuckets["50-75"].append(dist)
+            elif(dist <= 100):
+                freqErrorBuckets["75-100"].append(dist)
+            elif(dist <= 125):
+                freqErrorBuckets["100-125"].append(dist)
+            else:
+                freqErrorBuckets["125+"].append(dist)
             freqErrorSections[sec].append(dist)
     # Display the section frequency errors
     if useThresholdError:
@@ -172,6 +187,8 @@ def rmseModel(month: str="June",threshold: int=-101,useCovariate: bool =False, s
         print("The test errors had the following section distribution: ")
     for secKey in freqErrorSections.keys():
         print("{} : {}".format(secKey,freqErrorSections[secKey]))
+    for bucKey in freqErrorBuckets.keys():
+        print("{} : {} - {} %".format(bucKey,freqErrorBuckets[bucKey],len(freqErrorBuckets[bucKey])/len(yTestPred)))
     # Display the habitat frequency errors
     if useThresholdError:
         print("The test errors over {} m had the following habitat distribution: ".format(sectionThreshold))

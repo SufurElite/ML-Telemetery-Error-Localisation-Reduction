@@ -442,7 +442,17 @@ def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, op
     if includeCovariatePred:
         covariateModel = loadCovariateModel(month=month)
     # load in the data
-    data = loadData(month,isTrilat=isTrilat,optMultilat=optMultilat, pruned=pruned)
+    if(month == "all"):
+        data_0 = loadData("March",isTrilat=isTrilat,optMultilat=optMultilat, pruned=pruned)
+        data_1 = loadData("June",isTrilat=isTrilat,optMultilat=optMultilat, pruned=pruned)
+        data_2 = loadData("October",isTrilat=isTrilat,optMultilat=optMultilat, pruned=pruned)
+        data_3 = loadData("October_2",isTrilat=isTrilat,optMultilat=optMultilat, pruned=pruned)
+        data_4 = loadData("November",isTrilat=isTrilat,optMultilat=optMultilat, pruned=pruned)
+        data = {}
+        data["X"] = data_0["X"] + data_1["X"] + data_2["X"] + data_3["X"] + data_4["X"]
+        data["y"] = data_0["y"] + data_1["y"] + data_2["y"] + data_3["y"] + data_4["y"]
+    else:
+        data = loadData(month,isTrilat=isTrilat,optMultilat=optMultilat, pruned=pruned)
     X_vals = data["X"]
     y_vals = data["y"]
     assert(len(X_vals)==len(y_vals))
@@ -468,7 +478,10 @@ def loadRSSModelData(month="June",includeCovariatePred=False, isTrilat=False, op
         signal_X = [0 for i in range(len(nodeKeys))]
         tmp_y = [0 for i in range(len(nodeKeys))]
         # ground truth location
-        tagGt = utm.from_latlon(y_vals[i][0], y_vals[i][1])
+        if(y_vals[i][0] > 2000):
+            tagGt = [y_vals[i][0], y_vals[i][1]]
+        else:
+            tagGt = utm.from_latlon(y_vals[i][0], y_vals[i][1])
 
         for nodeNum in range(len(nodeKeys)):
             nodeKey = nodeKeys[nodeNum]
@@ -517,11 +530,18 @@ def loadModelData(month="June", modelType="initial", threshold=-102, includeCova
         res = multilat.predictions(threshold,keepNodeIds=True, isTrilat=isTrilat, optMultilat=optMultilat,month="June", otherMultilat=otherMultilat, pruned=pruned)
     elif(month == "March"):
         res = multilat.predictions(threshold,keepNodeIds=True,isTrilat=isTrilat, optMultilat=optMultilat, month="March", otherMultilat=otherMultilat, pruned=pruned)
+    elif(month == "all"):
+        res_1 = multilat.predictions(threshold,keepNodeIds=True,isTrilat=isTrilat, optMultilat=optMultilat, month="March", otherMultilat=otherMultilat, pruned=pruned)
+        res_2 = multilat.predictions(threshold,keepNodeIds=True, isTrilat=isTrilat, optMultilat=optMultilat,month="June", otherMultilat=otherMultilat, pruned=pruned)
+        res_3 = multilat.predictions(threshold,keepNodeIds=True, isTrilat=isTrilat, optMultilat=optMultilat,month="October", otherMultilat=otherMultilat, pruned=pruned)
+        res_4 = multilat.predictions(threshold,keepNodeIds=True, isTrilat=isTrilat, optMultilat=optMultilat,month="October_2", otherMultilat=otherMultilat, pruned=pruned)
+        res_5 = multilat.predictions(threshold,keepNodeIds=True, isTrilat=isTrilat, optMultilat=optMultilat,month="November", otherMultilat=otherMultilat, pruned=pruned)
+        res = res_1 | res_2 | res_3 | res_4 | res_5
     else:
         res = multilat.predictions(threshold, keepNodeIds=True,isTrilat=isTrilat, optMultilat=optMultilat ,month=month,otherMultilat=otherMultilat, pruned=pruned)
 
     rewriteUtm = False
-    if month=="June":
+    if month=="June" or month=="March":
         rewriteUtm = True
 
     if month=="June" or month == "March":
